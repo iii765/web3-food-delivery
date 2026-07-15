@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>🛵 Web3外卖 - 测试版</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 40px 20px;
+    }
+    .app {
+      max-width: 480px;
+      width: 100%;
+    }
+    h1 {
+      font-size: 24px;
+      text-align: center;
+      margin-bottom: 8px;
+    }
+    .subtitle {
+      text-align: center;
+      color: #888;
+      font-size: 13px;
+      margin-bottom: 24px;
+    }
+    .card {
+      background: #1a1a1a;
+      border: 1px solid #2a2a2a;
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 16px;
+    }
+    .card h3 {
+      font-size: 14px;
+      color: #aaa;
+      margin-bottom: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+    .row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 8px 0;
+      font-size: 14px;
+    }
+    .row .label { color: #888; }
+    .row .value { color: #fff; font-weight: 500; }
+    .address {
+      font-family: monospace;
+      font-size: 12px;
+      color: #6b8;
+      background: #111;
+      padding: 4px 8px;
+      border-radius: 4px;
+      word-break: break-all;
+    }
+    .flow {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin: 16px 0;
+    }
+    .step {
+      padding: 6px 14px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 600;
+      background: #222;
+      color: #555;
+      transition: all 0.3s;
+    }
+    .step.done { background: #0a3d0a; color: #4c4; }
+    .step.active { background: #3d2a0a; color: #fa0; animation: pulse 1.5s infinite; }
+    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.6 } }
+    button {
+      width: 100%;
+      padding: 14px;
+      border: none;
+      border-radius: 8px;
+      font-size: 16px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      margin-top: 8px;
+    }
+    button:disabled { opacity: 0.3; cursor: not-allowed; }
+    .btn-primary { background: #4a4; color: #fff; }
+    .btn-primary:hover:not(:disabled) { background: #5c5; }
+    .btn-connect { background: #f90; color: #000; }
+    .btn-connect:hover:not(:disabled) { background: #fa0; }
+    .btn-cancel { background: #a33; color: #fff; }
+    .tx-link {
+      font-family: monospace;
+      font-size: 11px;
+      color: #6af;
+      word-break: break-all;
+      margin-top: 6px;
+      display: block;
+    }
+    .input-group {
+      margin-bottom: 12px;
+    }
+    .input-group label {
+      display: block;
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 4px;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 10px 12px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 6px;
+      color: #fff;
+      font-size: 14px;
+      font-family: monospace;
+    }
+    .split-bar {
+      display: flex;
+      gap: 6px;
+      height: 24px;
+      border-radius: 4px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+    .split-bar .merchant { background: #4a4; transition: width 0.5s; }
+    .split-bar .rider { background: #f90; transition: width 0.5s; }
+    .split-bar .protocol { background: #6af; transition: width 0.5s; }
+    .legend {
+      display: flex;
+      gap: 16px;
+      font-size: 11px;
+      margin-top: 6px;
+    }
+    .legend span { display: flex; align-items: center; gap: 4px; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  </style>
+</head>
+<body>
+<div class="app">
+  <h1>🛵 Web3 外卖平台</h1>
+  <div class="subtitle">智能合约托管 · 自动分账 85/12/3</div>
+
+  <!-- 钱包 -->
+  <div class="card">
+    <h3>🔗 钱包</h3>
+    <div class="row">
+      <span class="label">网络</span>
+      <span class="value" id="network">未连接</span>
+    </div>
+    <div class="row">
+      <span class="label">账户</span>
+      <span class="value" id="account">—</span>
+    </div>
+    <button class="btn-connect" id="btnConnect" onclick="connect()">连接 MetaMask</button>
+  </div>
+
+  <!-- 订单流程 -->
+  <div class="card">
+    <h3>📋 订单流程 — 订单 #<span id="orderId">—</span></h3>
+    <div class="flow">
+      <span class="step" id="s1">📦 下单</span>
+      <span>→</span>
+      <span class="step" id="s2">👨‍🍳 接单</span>
+      <span>→</span>
+      <span class="step" id="s3">🛵 配送</span>
+      <span>→</span>
+      <span class="step" id="s4">📬 送达</span>
+      <span>→</span>
+      <span class="step" id="s5">💸 分账</span>
+    </div>
+
+    <div class="input-group">
+      <label>订单金额 (ETH)</label>
+      <input id="amount" type="text" value="0.01" placeholder="0.01">
+    </div>
+    <div class="input-group">
+      <label>商家地址</label>
+      <input id="merchantAddr" type="text" placeholder="0x..." value="0x70997970C51812dc3A010C7d01b50e0d17dc79C8">
+    </div>
+
+    <button class="btn-primary" id="btnCreate" onclick="createOrder()" disabled>📦 下单（资金托管到合约）</button>
+    <button class="btn-primary" id="btnAccept" onclick="acceptOrder()" disabled style="display:none">👨‍🍳 商家接单</button>
+    <button class="btn-primary" id="btnRider" onclick="assignRider()" disabled style="display:none">🛵 分配骑手</button>
+    <button class="btn-primary" id="btnDeliver" onclick="confirmDelivery()" disabled style="display:none">📬 骑手送达</button>
+    <button class="btn-primary" id="btnReceipt" onclick="confirmReceipt()" disabled style="display:none">💸 确认收货（自动分账）</button>
+    <button class="btn-cancel" id="btnCancel" onclick="cancelOrder()" disabled style="display:none">取消订单</button>
+
+    <div id="txInfo" style="margin-top:12px"></div>
+  </div>
+
+  <!-- 分账结果 -->
+  <div class="card" id="splitCard" style="display:none">
+    <h3>💰 分账结果</h3>
+    <div class="split-bar">
+      <div class="merchant" style="width:85%"></div>
+      <div class="rider" style="width:12%"></div>
+      <div class="protocol" style="width:3%"></div>
+    </div>
+    <div class="legend">
+      <span><span class="dot" style="background:#4a4"></span>商家 85%</span>
+      <span><span class="dot" style="background:#f90"></span>骑手 12%</span>
+      <span><span class="dot" style="background:#6af"></span>协议 3%</span>
+    </div>
+    <div class="row" style="margin-top:8px">
+      <span class="label">商家到手</span>
+      <span class="value" id="splitMerchant">—</span>
+    </div>
+    <div class="row">
+      <span class="label">骑手到手</span>
+      <span class="value" id="splitRider">—</span>
+    </div>
+    <div class="row">
+      <span class="label">协议费</span>
+      <span class="value" id="splitProtocol">—</span>
+    </div>
+  </div>
+</div>
+
+<script>
+  // ============ 配置 ============
+  const CONTRACT_ADDR = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
+  const ABI = [
+    "function createOrder(address merchant, string metadata) payable returns (uint256)",
+    "function acceptOrder(uint256 orderId)",
+    "function assignRider(uint256 orderId, address rider)",
+    "function confirmDelivery(uint256 orderId)",
+    "function confirmReceipt(uint256 orderId)",
+    "function cancelOrder(uint256 orderId)",
+    "function getOrder(uint256 orderId) view returns (tuple(uint256,address,address,address,uint256,uint256,uint8,string))",
+    "function merchantShare() view returns (uint256)",
+    "function riderShare() view returns (uint256)",
+    "function getProtocolFee() view returns (uint256)",
+    "event OrderCreated(uint256 indexed, address indexed, uint256)",
+    "event OrderCompleted(uint256 indexed, uint256, uint256, uint256)"
+  ];
+
+  let provider, signer, contract, currentAccount, currentOrderId = null;
+  const roles = {}; // 用本地链账户
+  const STATUS_NAMES = ["Pending","Accepted","Delivering","Delivered","Completed","Cancelled","Disputed"];
+
+  // ============ 连接钱包 ============
+  async function connect() {
+    if (!window.ethereum) return alert("请安装 MetaMask！");
+
+    // 切到本地链
+    try {
+      await window.ethereum.request({
+        method: "wallet_switchEthereumChain",
+        params: [{ chainId: "0x7a69" }] // 31337
+      });
+    } catch (e) {
+      await window.ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [{
+          chainId: "0x7a69",
+          chainName: "Hardhat Local",
+          rpcUrls: ["http://127.0.0.1:8545"],
+          nativeCurrency: { name: "ETH", symbol: "ETH", decimals: 18 }
+        }]
+      });
+    }
+
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    currentAccount = accounts[0];
+    provider = new ethers.BrowserProvider(window.ethereum);
+    signer = await provider.getSigner();
+    contract = new ethers.Contract(CONTRACT_ADDR, ABI, signer);
+
+    document.getElementById("network").textContent = "Hardhat Local (31337)";
+    document.getElementById("account").innerHTML = `<span class="address">${currentAccount}</span>`;
+    document.getElementById("btnConnect").textContent = "✅ 已连接";
+    document.getElementById("btnConnect").disabled = true;
+    document.getElementById("btnCreate").disabled = false;
+
+    // 预填本地链角色
+    const addrs = [
+      "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266", // user
+      "0x70997970C51812dc3A010C7d01b50e0d17dc79C8", // merchant
+      "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC", // rider
+    ];
+    document.getElementById("merchantAddr").value = addrs[1];
+
+    // 侦听账户切换
+    window.ethereum.on("accountsChanged", (a) => { currentAccount = a[0]; document.getElementById("account").innerHTML = `<span class="address">${currentAccount}</span>`; });
+  }
+
+  // ============ 步骤高亮 ============
+  function highlight(status) {
+    for (let i = 1; i <= 5; i++) {
+      const el = document.getElementById("s" + i);
+      el.classList.remove("done", "active");
+      if (i < status) el.classList.add("done");
+      if (i === status) el.classList.add("active");
+    }
+  }
+
+  function showBtn(id) { document.getElementById(id).style.display = "block"; document.getElementById(id).disabled = false; }
+  function hideBtn(id) { document.getElementById(id).style.display = "none"; }
+  function showTx(hash) { document.getElementById("txInfo").innerHTML = `<a class="tx-link">📝 Tx: ${hash}</a>`; }
+
+  // ============ 第1步：下单 ============
+  async function createOrder() {
+    const amount = document.getElementById("amount").value;
+    const merchant = document.getElementById("merchantAddr").value;
+    if (!merchant) return alert("填商家地址");
+
+    const tx = await contract.createOrder(merchant, '{"items":"黄焖鸡米饭"}', {
+      value: ethers.parseEther(amount)
+    });
+    showTx(tx.hash);
+    const receipt = await tx.wait();
+
+    // 从事件取 orderId
+    const log = receipt.logs.find(l => l.fragment && l.fragment.name === "OrderCreated");
+    currentOrderId = log.args[0];
+    document.getElementById("orderId").textContent = currentOrderId.toString();
+
+    highlight(2);
+    hideBtn("btnCreate");
+    showBtn("btnAccept");
+    showBtn("btnCancel");
+    document.getElementById("btnCreate").disabled = true;
+
+    console.log("✅ 下单成功，订单#", currentOrderId.toString());
+  }
+
+  // ============ 第2步：接单 ============
+  async function acceptOrder() {
+    const tx = await contract.acceptOrder(currentOrderId);
+    showTx(tx.hash);
+    await tx.wait();
+    highlight(3);
+    hideBtn("btnAccept");
+    hideBtn("btnCancel");
+    showBtn("btnRider");
+  }
+
+  // ============ 第3步：分配骑手 ============
+  async function assignRider() {
+    const riderAddr = prompt("骑手地址 (本地链默认 #2):", "0x3C44CdDdB6a900fa2b585dd299e03d12FA4293BC");
+    if (!riderAddr) return;
+    const tx = await contract.assignRider(currentOrderId, riderAddr);
+    showTx(tx.hash);
+    await tx.wait();
+    highlight(4);
+    hideBtn("btnRider");
+    showBtn("btnDeliver");
+  }
+
+  // ============ 第4步：送达 ============
+  async function confirmDelivery() {
+    const tx = await contract.confirmDelivery(currentOrderId);
+    showTx(tx.hash);
+    await tx.wait();
+    highlight(5);
+    hideBtn("btnDeliver");
+    showBtn("btnReceipt");
+  }
+
+  // ============ 第5步：分账 ============
+  async function confirmReceipt() {
+    const tx = await contract.confirmReceipt(currentOrderId);
+    showTx(tx.hash);
+    const receipt = await tx.wait();
+    const log = receipt.logs.find(l => l.fragment && l.fragment.name === "OrderCompleted");
+    const [orderId, merchantAmt, riderAmt, protocolAmt] = log.args;
+
+    highlight(6);
+    for (let i = 1; i <= 5; i++) document.getElementById("s" + i).classList.add("done");
+
+    document.getElementById("splitCard").style.display = "block";
+    document.getElementById("splitMerchant").textContent = ethers.formatEther(merchantAmt) + " ETH";
+    document.getElementById("splitRider").textContent = ethers.formatEther(riderAmt) + " ETH";
+    document.getElementById("splitProtocol").textContent = ethers.formatEther(protocolAmt) + " ETH";
+
+    hideBtn("btnReceipt");
+    document.getElementById("btnCreate").disabled = false;
+    document.getElementById("btnCreate").textContent = "📦 再来一单";
+  }
+
+  async function cancelOrder() {
+    const tx = await contract.cancelOrder(currentOrderId);
+    showTx(tx.hash);
+    await tx.wait();
+    highlight(6);
+    hideBtn("btnAccept");
+    hideBtn("btnCancel");
+    document.getElementById("btnCreate").disabled = false;
+    document.getElementById("btnCreate").textContent = "📦 再来一单";
+    document.getElementById("txInfo").innerHTML += "<br>💰 已全额退款";
+  }
+</script>
+</body>
+</html>
