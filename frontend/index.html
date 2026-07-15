@@ -263,7 +263,7 @@
   const NETWORKS = {
     monad: {
       chainId: 10143,
-      chainIdHex: "0x27A3",
+      chainIdHex: "0x27a3",
       name: "Monad Testnet",
       rpc: "https://testnet-rpc.monad.xyz",
       currency: "MON",
@@ -320,9 +320,9 @@
   async function connect() {
     if (!window.ethereum) return alert("请安装 MetaMask！");
 
-    // 只看当前链对不对，不对就只切不添加
+    // 只看当前链对不对，不对就只切不添加（MetaMask 返回小写，统一转小写比对）
     const curId = await window.ethereum.request({ method: "eth_chainId" });
-    if (curId !== net.chainIdHex) {
+    if (curId.toLowerCase() !== net.chainIdHex.toLowerCase()) {
       try {
         await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: net.chainIdHex }] });
       } catch (e) {
