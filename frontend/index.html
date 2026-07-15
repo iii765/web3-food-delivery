@@ -320,25 +320,20 @@
   async function connect() {
     if (!window.ethereum) return alert("请安装 MetaMask！");
 
-    // 只看当前链对不对，不对就只切不添加（MetaMask 返回小写，统一转小写比对）
-    const curId = await window.ethereum.request({ method: "eth_chainId" });
-    if (curId.toLowerCase() !== net.chainIdHex.toLowerCase()) {
-      try {
-        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: net.chainIdHex }] });
-      } catch (e) {
-        // 不管什么错，提醒用户手动切
-        if (e.code === 4902) {
-          return alert("MetaMask 还没添加 " + net.name + "。\n\n请手动：设置 → 网络 → 添加网络\nRPC: " + net.rpc + "\nChain ID: " + net.chainId);
-        }
-        return alert("请在 MetaMask 左上角手动切换到 " + net.name + "，再回来点连接");
-      }
-    }
-
     const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
     currentAccount = accounts[0];
     provider = new ethers.BrowserProvider(window.ethereum);
     signer = await provider.getSigner();
     contract = new ethers.Contract(net.contract, ABI, signer);
+
+    // 检查是否在正确网络
+    const curId = await window.ethereum.request({ method: "eth_chainId" });
+    const onRightNet = curId.toLowerCase() === net.chainIdHex.toLowerCase();
+    if (!onRightNet) {
+      document.getElementById("network").innerHTML = `<span style="color:#f66">⚠ 当前不在 ${net.name}！请手动切换</span>`;
+      document.getElementById("btnCreate").disabled = true;
+      return;
+    }
 
     document.getElementById("network").innerHTML = `${net.name} (${net.chainId})`;
     document.getElementById("account").innerHTML = `<span class="address">${currentAccount}</span>`;
