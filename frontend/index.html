@@ -320,25 +320,39 @@
   async function connect() {
     if (!window.ethereum) return alert("请安装 MetaMask！");
 
-    try {
-      await window.ethereum.request({
-        method: "wallet_switchEthereumChain",
-        params: [{ chainId: net.chainIdHex }]
-      });
-    } catch (e) {
+    const curChainId = await window.ethereum.request({ method: "eth_chainId" });
+    
+    // 已经在目标网络 → 直接连
+    if (curChainId === net.chainIdHex) {
+      // 不需要切换
+    } else {
+      // 尝试切换
       try {
         await window.ethereum.request({
-          method: "wallet_addEthereumChain",
-          params: [{
-            chainId: net.chainIdHex,
-            chainName: net.name,
-            rpcUrls: [net.rpc],
-            nativeCurrency: { name: net.currency, symbol: net.currency, decimals: 18 },
-            blockExplorerUrls: net.explorer ? [net.explorer] : []
-          }]
+          method: "wallet_switchEthereumChain",
+          params: [{ chainId: net.chainIdHex }]
         });
-      } catch (e2) {
-        return alert("添加网络失败: " + e2.message);
+      } catch (e) {
+        // 切换失败，尝试添加
+        if (e.code === 4902) {
+          try {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: net.chainIdHex,
+                chainName: net.name,
+                rpcUrls: [net.rpc],
+                nativeCurrency: { name: net.currency, symbol: net.currency, decimals: 18 },
+                blockExplorerUrls: net.explorer ? [net.explorer] : []
+              }]
+            });
+          } catch (e2) {
+            return alert("请在 MetaMask 手动切换到 " + net.name + "（已存在同名网络就直接选，不要重新添加）");
+          }
+        } else {
+          // 已经是这个链但可能名字不同，直接继续
+          console.log("网络切换提示:", e.message);
+        }
       }
     }
 
