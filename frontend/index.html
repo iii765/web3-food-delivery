@@ -320,39 +320,17 @@
   async function connect() {
     if (!window.ethereum) return alert("请安装 MetaMask！");
 
-    const curChainId = await window.ethereum.request({ method: "eth_chainId" });
-    
-    // 已经在目标网络 → 直接连
-    if (curChainId === net.chainIdHex) {
-      // 不需要切换
-    } else {
-      // 尝试切换
+    // 只看当前链对不对，不对就只切不添加
+    const curId = await window.ethereum.request({ method: "eth_chainId" });
+    if (curId !== net.chainIdHex) {
       try {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: net.chainIdHex }]
-        });
+        await window.ethereum.request({ method: "wallet_switchEthereumChain", params: [{ chainId: net.chainIdHex }] });
       } catch (e) {
-        // 切换失败，尝试添加
+        // 不管什么错，提醒用户手动切
         if (e.code === 4902) {
-          try {
-            await window.ethereum.request({
-              method: "wallet_addEthereumChain",
-              params: [{
-                chainId: net.chainIdHex,
-                chainName: net.name,
-                rpcUrls: [net.rpc],
-                nativeCurrency: { name: net.currency, symbol: net.currency, decimals: 18 },
-                blockExplorerUrls: net.explorer ? [net.explorer] : []
-              }]
-            });
-          } catch (e2) {
-            return alert("请在 MetaMask 手动切换到 " + net.name + "（已存在同名网络就直接选，不要重新添加）");
-          }
-        } else {
-          // 已经是这个链但可能名字不同，直接继续
-          console.log("网络切换提示:", e.message);
+          return alert("MetaMask 还没添加 " + net.name + "。\n\n请手动：设置 → 网络 → 添加网络\nRPC: " + net.rpc + "\nChain ID: " + net.chainId);
         }
+        return alert("请在 MetaMask 左上角手动切换到 " + net.name + "，再回来点连接");
       }
     }
 
