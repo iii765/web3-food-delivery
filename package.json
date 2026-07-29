@@ -1,7 +1,7 @@
 {
-  "name": "web3-dev",
+  "name": "web3-food-delivery",
   "version": "1.0.0",
-  "description": "",
+  "description": "Smart-contract escrow food delivery MVP",
   "main": "index.js",
   "scripts": {
     "test": "hardhat test",
@@ -10,7 +10,13 @@
     "serve": "node scripts/serve-frontend.js",
     "demo": "hardhat run scripts/demo-order.js --network localhost"
   },
-  "keywords": [],
+  "keywords": [
+    "solidity",
+    "hardhat",
+    "web3",
+    "food-delivery",
+    "monad"
+  ],
   "author": "",
   "license": "ISC",
   "devDependencies": {
