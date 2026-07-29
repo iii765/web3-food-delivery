@@ -3,446 +3,57 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>🛵 Web3外卖 - Monad Testnet</title>
-  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+  <title>Web3 外卖平台 · 本地测试入口</title>
+  <script src="./config.js"></script>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-    body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      background: #0f0f0f;
-      color: #e0e0e0;
-      min-height: 100vh;
-      display: flex;
-      justify-content: center;
-      padding: 40px 20px;
-    }
-    .app { max-width: 480px; width: 100%; }
-    h1 { font-size: 24px; text-align: center; margin-bottom: 4px; }
-    .badge {
-      display: inline-block;
-      background: #8364e2;
-      color: #fff;
-      font-size: 10px;
-      padding: 2px 8px;
-      border-radius: 10px;
-      font-weight: 700;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .network-selector {
-      display: flex;
-      gap: 8px;
-      margin: 12px 0;
-    }
-    .network-selector button {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #333;
-      border-radius: 6px;
-      background: #1a1a1a;
-      color: #666;
-      cursor: pointer;
-      font-size: 13px;
-    }
-    .network-selector button.active {
-      border-color: #8364e2;
-      color: #8364e2;
-      background: #1a1028;
-    }
-    .subtitle { text-align: center; color: #888; font-size: 13px; margin-bottom: 16px; }
-    .card {
-      background: #1a1a1a;
-      border: 1px solid #2a2a2a;
-      border-radius: 12px;
-      padding: 20px;
-      margin-bottom: 16px;
-    }
-    .card h3 {
-      font-size: 14px;
-      color: #aaa;
-      margin-bottom: 12px;
-      text-transform: uppercase;
-      letter-spacing: 1px;
-    }
-    .row {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      padding: 8px 0;
-      font-size: 14px;
-    }
-    .row .label { color: #888; }
-    .row .value { color: #fff; font-weight: 500; }
-    .address {
-      font-family: monospace;
-      font-size: 12px;
-      color: #6b8;
-      background: #111;
-      padding: 4px 8px;
-      border-radius: 4px;
-      word-break: break-all;
-    }
-    .flow {
-      display: flex;
-      align-items: center;
-      gap: 6px;
-      flex-wrap: wrap;
-      margin: 16px 0;
-    }
-    .step {
-      padding: 5px 12px;
-      border-radius: 20px;
-      font-size: 12px;
-      font-weight: 600;
-      background: #222;
-      color: #555;
-      transition: all 0.3s;
-    }
-    .step.done { background: #0a3d0a; color: #4c4; }
-    .step.active { background: #3d2a0a; color: #fa0; animation: pulse 1.5s infinite; }
-    @keyframes pulse { 0%,100% { opacity:1 } 50% { opacity:0.6 } }
-    button {
-      width: 100%;
-      padding: 14px;
-      border: none;
-      border-radius: 8px;
-      font-size: 16px;
-      font-weight: 600;
-      cursor: pointer;
-      transition: all 0.2s;
-      margin-top: 8px;
-    }
-    button:disabled { opacity: 0.3; cursor: not-allowed; }
-    .btn-primary { background: #4a4; color: #fff; }
-    .btn-primary:hover:not(:disabled) { background: #5c5; }
-    .btn-connect { background: #8364e2; color: #fff; }
-    .btn-connect:hover:not(:disabled) { background: #9478f0; }
-    .btn-cancel { background: #a33; color: #fff; }
-    .tx-link {
-      font-family: monospace;
-      font-size: 11px;
-      color: #6af;
-      word-break: break-all;
-      margin-top: 6px;
-      display: block;
-    }
-    .input-group {
-      margin-bottom: 12px;
-    }
-    .input-group label {
-      display: block;
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 4px;
-    }
-    .input-group input {
-      width: 100%;
-      padding: 10px 12px;
-      background: #111;
-      border: 1px solid #333;
-      border-radius: 6px;
-      color: #fff;
-      font-size: 14px;
-      font-family: monospace;
-    }
-    .split-bar {
-      display: flex;
-      gap: 6px;
-      height: 24px;
-      border-radius: 4px;
-      overflow: hidden;
-      margin-top: 8px;
-    }
-    .split-bar .merchant { background: #4a4; transition: width 0.5s; }
-    .split-bar .rider { background: #f90; transition: width 0.5s; }
-    .split-bar .protocol { background: #6af; transition: width 0.5s; }
-    .legend {
-      display: flex;
-      gap: 16px;
-      font-size: 11px;
-      margin-top: 6px;
-    }
-    .legend span { display: flex; align-items: center; gap: 4px; }
-    .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
-    .hint {
-      font-size: 11px;
-      color: #666;
-      margin-top: 4px;
-    }
+    :root { color-scheme: dark; --bg:#0b1020; --card:#151d35; --line:#2a365a; --primary:#7c9cff; --text:#edf1ff; --muted:#9cabc8; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; font-family:system-ui,-apple-system,"Microsoft YaHei",sans-serif; background:radial-gradient(circle at 10% 10%,#202f61 0,transparent 28%),var(--bg); color:var(--text); }
+    main { max-width:980px; padding:64px 24px; margin:auto; }
+    h1 { margin:0 0 12px; font-size:clamp(30px,5vw,48px); }
+    .lead { margin:0 0 28px; color:var(--muted); font-size:17px; line-height:1.7; }
+    .network { display:flex; gap:10px; flex-wrap:wrap; margin:0 0 34px; }
+    .badge { padding:9px 12px; background:#101934; border:1px solid var(--line); border-radius:9px; color:#c9d5ff; font-size:14px; }
+    .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(205px,1fr)); gap:16px; }
+    a.card { display:block; padding:22px; border:1px solid var(--line); border-radius:15px; background:linear-gradient(145deg,#192443,#111a31); text-decoration:none; color:var(--text); transition:transform .15s,border-color .15s; }
+    a.card:hover { transform:translateY(-3px); border-color:var(--primary); }
+    .icon { font-size:29px; display:block; margin-bottom:12px; }
+    .title { font-size:19px; font-weight:700; margin-bottom:8px; }
+    .desc { color:var(--muted); font-size:14px; line-height:1.6; }
+    .steps { margin-top:36px; padding:22px; border-left:3px solid var(--primary); background:#101934; border-radius:0 12px 12px 0; line-height:1.85; color:#cad5ef; }
+    code { padding:2px 6px; border-radius:5px; background:#232f50; color:#d9e2ff; }
+    .warning { margin-top:22px; color:#f4c780; font-size:14px; }
   </style>
 </head>
 <body>
-<div class="app">
-  <h1>🛵 Web3 外卖平台 <span class="badge" id="netBadge">MONAD</span></h1>
-  <div class="subtitle">智能合约托管 · 自动分账 85/12/3</div>
+  <main>
+    <h1>🛵 Web3 外卖平台</h1>
+    <p class="lead">本地联调统一入口。按角色打开页面、切换 MetaMask 账户，完成一笔订单的全流程测试。</p>
 
-  <div class="network-selector">
-    <button id="btnNetMonad" class="active" onclick="switchNet('monad')">🔮 Monad Testnet</button>
-    <button id="btnNetLocal" onclick="switchNet('local')">💻 本地链</button>
-  </div>
-
-  <!-- 钱包 -->
-  <div class="card">
-    <h3>🔗 钱包</h3>
-    <div class="row">
-      <span class="label">网络</span>
-      <span class="value" id="network">未连接</span>
-    </div>
-    <div class="row">
-      <span class="label">账户</span>
-      <span class="value" id="account">—</span>
-    </div>
-    <button class="btn-connect" id="btnConnect" onclick="connect()">连接 MetaMask</button>
-    <div class="hint" id="netHint"></div>
-  </div>
-
-  <!-- 订单 -->
-  <div class="card">
-    <h3>📋 订单流程 — 订单 #<span id="orderId">—</span></h3>
-    <div class="flow">
-      <span class="step" id="s1">📦 下单</span><span>→</span>
-      <span class="step" id="s2">👨‍🍳 接单</span><span>→</span>
-      <span class="step" id="s3">🛵 配送</span><span>→</span>
-      <span class="step" id="s4">📬 送达</span><span>→</span>
-      <span class="step" id="s5">💸 分账</span>
+    <div class="network">
+      <span class="badge" id="networkName">本地网络：Hardhat Local（31337）</span>
+      <span class="badge" id="contractAddress">合约：加载中…</span>
     </div>
 
-    <div class="input-group">
-      <label>订单金额 (MON)</label>
-      <input id="amount" type="text" value="0.01" placeholder="0.01">
+    <section class="grid" aria-label="角色测试页面">
+      <a class="card" href="customer.html"><span class="icon">🙋</span><div class="title">用户端</div><div class="desc">下单、查看订单、确认收货或取消待接单订单。</div></a>
+      <a class="card" href="merchant.html"><span class="icon">🏪</span><div class="title">商家端</div><div class="desc">查看分配给自己的订单并接单。</div></a>
+      <a class="card" href="rider.html"><span class="icon">🛵</span><div class="title">骑手端</div><div class="desc">抢已接订单，并在配送后确认送达。</div></a>
+      <a class="card" href="admin.html"><span class="icon">🛠️</span><div class="title">管理端</div><div class="desc">查看订单总览、协议费用和链上事件。</div></a>
+    </section>
+
+    <div class="steps">
+      <strong>唯一测试顺序：</strong><br>
+      1. 终端 A：<code>npm run node</code><br>
+      2. 终端 B：<code>npm run deploy:local</code>（自动同步最新地址）<br>
+      3. 用户端下单 → 商家端接单 → 骑手端抢单/送达 → 用户端确认收货 → 管理端核对分账
     </div>
-    <div class="input-group">
-      <label id="merchantLabel">商家地址</label>
-      <input id="merchantAddr" type="text" placeholder="0x..." value="">
-    </div>
-    <div class="input-group" id="riderGroup" style="display:none">
-      <label>骑手地址</label>
-      <input id="riderAddr" type="text" placeholder="0x..." value="">
-    </div>
-
-    <button class="btn-primary" id="btnCreate" onclick="createOrder()" disabled>📦 下单（资金托管到合约）</button>
-    <button class="btn-primary" id="btnAccept" onclick="acceptOrder()" disabled style="display:none">👨‍🍳 商家接单</button>
-    <button class="btn-primary" id="btnRider" onclick="assignRider()" disabled style="display:none">🛵 分配骑手</button>
-    <button class="btn-primary" id="btnDeliver" onclick="confirmDelivery()" disabled style="display:none">📬 骑手送达</button>
-    <button class="btn-primary" id="btnReceipt" onclick="confirmReceipt()" disabled style="display:none">💸 确认收货（自动分账）</button>
-    <button class="btn-cancel" id="btnCancel" onclick="cancelOrder()" disabled style="display:none">取消订单</button>
-
-    <div id="txInfo" style="margin-top:12px"></div>
-  </div>
-
-  <!-- 分账结果 -->
-  <div class="card" id="splitCard" style="display:none">
-    <h3>💰 分账结果</h3>
-    <div class="split-bar">
-      <div class="merchant" style="width:85%"></div>
-      <div class="rider" style="width:12%"></div>
-      <div class="protocol" style="width:3%"></div>
-    </div>
-    <div class="legend">
-      <span><span class="dot" style="background:#4a4"></span>商家 85%</span>
-      <span><span class="dot" style="background:#f90"></span>骑手 12%</span>
-      <span><span class="dot" style="background:#6af"></span>协议 3%</span>
-    </div>
-    <div class="row" style="margin-top:8px">
-      <span class="label">商家到手</span>
-      <span class="value" id="splitMerchant">—</span>
-    </div>
-    <div class="row">
-      <span class="label">骑手到手</span>
-      <span class="value" id="splitRider">—</span>
-    </div>
-    <div class="row">
-      <span class="label">协议费</span>
-      <span class="value" id="splitProtocol">—</span>
-    </div>
-  </div>
-</div>
-
-<script>
-  // ============ 双网络配置 ============
-  const NETWORKS = {
-    monad: {
-      chainId: 10143,
-      chainIdHex: "0x27a3",
-      name: "Monad Testnet",
-      rpc: "https://testnet-rpc.monad.xyz",
-      currency: "MON",
-      explorer: "https://testnet.monadexplorer.com",
-      contract: "0xd1807927CD56CC87Ec846B96aBCFdFD959529436",
-      label: "MONAD",
-      hint: "需要 MetaMask 添加 Monad Testnet 网络"
-    },
-    local: {
-      chainId: 31337,
-      chainIdHex: "0x7a69",
-      name: "Hardhat Local",
-      rpc: "http://127.0.0.1:8545",
-      currency: "ETH",
-      explorer: null,
-      contract: "0x5FbDB2315678afecb367f032d93F642f64180aa3",
-      label: "LOCAL",
-      hint: "先跑 npx hardhat node，再刷浏览器"
-    }
-  };
-
-  let currentNet = "monad";
-  let net = NETWORKS[currentNet];
-  let provider, signer, contract, currentAccount, currentOrderId = null;
-
-  const ABI = [
-    "function createOrder(address merchant, string metadata) payable returns (uint256)",
-    "function acceptOrder(uint256 orderId)",
-    "function assignRider(uint256 orderId, address rider)",
-    "function confirmDelivery(uint256 orderId)",
-    "function confirmReceipt(uint256 orderId)",
-    "function cancelOrder(uint256 orderId)",
-    "function getOrder(uint256 orderId) view returns (tuple(uint256,address,address,address,uint256,uint256,uint8,string))",
-    "event OrderCreated(uint256 indexed, address indexed, uint256)",
-    "event OrderCompleted(uint256 indexed, uint256, uint256, uint256)"
-  ];
-
-  // ============ 切换网络 ============
-  function switchNet(key) {
-    currentNet = key;
-    net = NETWORKS[key];
-    document.getElementById("netBadge").textContent = net.label;
-    document.getElementById("btnNetMonad").classList.toggle("active", key==="monad");
-    document.getElementById("btnNetLocal").classList.toggle("active", key==="local");
-    document.getElementById("netHint").textContent = net.hint;
-    document.getElementById("btnConnect").textContent = "连接 MetaMask";
-    document.getElementById("btnConnect").disabled = false;
-    document.getElementById("network").textContent = "未连接";
-    document.getElementById("account").textContent = "—";
-    resetOrder();
-  }
-
-  // ============ 连接 ============
-  async function connect() {
-    if (!window.ethereum) return alert("请安装 MetaMask！");
-
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    currentAccount = accounts[0];
-    provider = new ethers.BrowserProvider(window.ethereum);
-    signer = await provider.getSigner();
-    contract = new ethers.Contract(net.contract, ABI, signer);
-
-    // 检查是否在正确网络
-    const curId = await window.ethereum.request({ method: "eth_chainId" });
-    const onRightNet = curId.toLowerCase() === net.chainIdHex.toLowerCase();
-    if (!onRightNet) {
-      document.getElementById("network").innerHTML = `<span style="color:#f66">⚠ 当前不在 ${net.name}！请手动切换</span>`;
-      document.getElementById("btnCreate").disabled = true;
-      return;
-    }
-
-    document.getElementById("network").innerHTML = `${net.name} (${net.chainId})`;
-    document.getElementById("account").innerHTML = `<span class="address">${currentAccount}</span>`;
-    document.getElementById("btnConnect").textContent = "✅ 已连接";
-    document.getElementById("btnConnect").disabled = true;
-    document.getElementById("btnCreate").disabled = false;
-
-    if (currentNet === "local") {
-      document.getElementById("merchantAddr").value = "0x70997970C51812dc3A010C7d01b50e0d17dc79C8";
-    }
-  }
-
-  // ============ UI 辅助 ============
-  function highlight(status) {
-    for (let i=1; i<=5; i++) {
-      const el = document.getElementById("s"+i);
-      el.classList.remove("done","active");
-      if (i < status) el.classList.add("done");
-      if (i === status) el.classList.add("active");
-    }
-  }
-  function showBtn(id) { document.getElementById(id).style.display="block"; document.getElementById(id).disabled=false; }
-  function hideBtn(id) { document.getElementById(id).style.display="none"; }
-  function showTx(hash) {
-    const link = net.explorer
-      ? `<a class="tx-link" href="${net.explorer}/tx/${hash}" target="_blank">📝 Tx: ${hash.slice(0,20)}... ↗</a>`
-      : `<span class="tx-link">📝 Tx: ${hash.slice(0,20)}...</span>`;
-    document.getElementById("txInfo").innerHTML = link;
-  }
-  function resetOrder() {
-    currentOrderId = null;
-    for (let i=1; i<=5; i++) document.getElementById("s"+i).classList.remove("done","active");
-    ["btnCreate","btnAccept","btnRider","btnDeliver","btnReceipt","btnCancel"].forEach(id => {
-      if (id !== "btnCreate") hideBtn(id);
-      else { document.getElementById("btnCreate").style.display="block"; document.getElementById("btnCreate").disabled = !currentAccount; }
-    });
-    document.getElementById("splitCard").style.display="none";
-    document.getElementById("txInfo").innerHTML="";
-    document.getElementById("orderId").textContent="—";
-  }
-
-  // ============ 订单流程 ============
-  async function createOrder() {
-    const amount = document.getElementById("amount").value;
-    const merchant = document.getElementById("merchantAddr").value;
-    if (!merchant) return alert("填商家地址");
-
-    const tx = await contract.createOrder(merchant, '{"items":"黄焖鸡米饭"}', {
-      value: ethers.parseEther(amount)
-    });
-    showTx(tx.hash);
-    const receipt = await tx.wait();
-    const log = receipt.logs.find(l => l.fragment?.name === "OrderCreated");
-    currentOrderId = log.args[0];
-    document.getElementById("orderId").textContent = currentOrderId.toString();
-
-    highlight(2);
-    hideBtn("btnCreate"); showBtn("btnAccept"); showBtn("btnCancel");
-  }
-
-  async function acceptOrder() {
-    const tx = await contract.acceptOrder(currentOrderId);
-    showTx(tx.hash); await tx.wait();
-    highlight(3);
-    hideBtn("btnAccept"); hideBtn("btnCancel");
-    showBtn("btnRider"); document.getElementById("riderGroup").style.display="block";
-  }
-
-  async function assignRider() {
-    const rider = document.getElementById("riderAddr").value;
-    if (!rider) return alert("填骑手地址");
-    const tx = await contract.assignRider(currentOrderId, rider);
-    showTx(tx.hash); await tx.wait();
-    highlight(4);
-    hideBtn("btnRider"); showBtn("btnDeliver");
-  }
-
-  async function confirmDelivery() {
-    const tx = await contract.confirmDelivery(currentOrderId);
-    showTx(tx.hash); await tx.wait();
-    highlight(5);
-    hideBtn("btnDeliver"); showBtn("btnReceipt");
-  }
-
-  async function confirmReceipt() {
-    const tx = await contract.confirmReceipt(currentOrderId);
-    showTx(tx.hash);
-    const receipt = await tx.wait();
-    const log = receipt.logs.find(l => l.fragment?.name === "OrderCompleted");
-    const [_, merchantAmt, riderAmt, protocolAmt] = log.args;
-
-    for (let i=1;i<=5;i++) document.getElementById("s"+i).classList.add("done");
-    document.getElementById("splitCard").style.display="block";
-    document.getElementById("splitMerchant").textContent = ethers.formatEther(merchantAmt) + " " + net.currency;
-    document.getElementById("splitRider").textContent = ethers.formatEther(riderAmt) + " " + net.currency;
-    document.getElementById("splitProtocol").textContent = ethers.formatEther(protocolAmt) + " " + net.currency;
-    hideBtn("btnReceipt");
-    document.getElementById("btnCreate").disabled=false;
-    document.getElementById("btnCreate").textContent="📦 再来一单";
-  }
-
-  async function cancelOrder() {
-    const tx = await contract.cancelOrder(currentOrderId);
-    showTx(tx.hash); await tx.wait();
-    resetOrder();
-    document.getElementById("txInfo").innerHTML += "<br>💰 已全额退款";
-  }
-
-  switchNet("monad");
-</script>
+    <p class="warning">本地链重启会清空订单和合约；每次重启后都必须重新执行 <code>npm run deploy:local</code>，再刷新页面。</p>
+  </main>
+  <script>
+    const local = window.WEB3_FOOD_CONFIG.networks["31337"];
+    document.getElementById("networkName").textContent = `本地网络：${local.name}（${local.chainId}）`;
+    document.getElementById("contractAddress").textContent = `合约：${local.contractAddress.slice(0, 10)}…${local.contractAddress.slice(-6)}`;
+  </script>
 </body>
 </html>

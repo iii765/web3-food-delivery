@@ -139,21 +139,20 @@ contract OrderContract {
     }
 
     /**
-     * @notice 分配骑手（商家调用或骑手自己抢单）
-     * @param _rider 骑手地址
+     * @notice 骑手自主抢单（任何人都可以调，先到先得）
+     * @dev 商家接单后状态变为 Accepted，骑手调此函数抢单
      */
-    function assignRider(uint256 _orderId, address payable _rider)
+    function claimOrder(uint256 _orderId)
         external
-        onlyMerchant(_orderId)
         inStatus(_orderId, OrderStatus.Accepted)
     {
-        require(_rider != address(0), "Invalid rider");
-        require(_rider != orders[_orderId].customer, "Rider cannot be customer");
-        require(_rider != orders[_orderId].merchant, "Rider cannot be merchant");
+        Order storage order = orders[_orderId];
+        require(msg.sender != order.customer, "Customer cannot be rider");
+        require(msg.sender != order.merchant, "Merchant cannot be rider");
 
-        orders[_orderId].rider = _rider;
-        orders[_orderId].status = OrderStatus.Delivering;
-        emit RiderAssigned(_orderId, _rider);
+        order.rider = payable(msg.sender);
+        order.status = OrderStatus.Delivering;
+        emit RiderAssigned(_orderId, msg.sender);
     }
 
     /**
@@ -170,7 +169,7 @@ contract OrderContract {
 
     /**
      * @notice 用户确认收货 → 自动分账
-     * @dev 商家85% + 骑手12% + 协议3%
+     * @dev 有骑手时：商家85% + 骑手12% + 协议3%；无骑手（自配送）时：商家97% + 协议3%
      */
     function confirmReceipt(uint256 _orderId)
         external
@@ -179,25 +178,7 @@ contract OrderContract {
     {
         Order storage order = orders[_orderId];
         order.status = OrderStatus.Completed;
-
-        // 计算分账
-        uint256 merchantAmount = (order.amount * merchantShare) / 100;
-        uint256 riderAmount = (order.amount * riderShare) / 100;
-        uint256 protocolAmount = order.amount - merchantAmount - riderAmount;
-
-        protocolFees += protocolAmount;
-
-        // 转账（用 call 替代 transfer，更安全）
-        (bool mSuccess, ) = order.merchant.call{value: merchantAmount}("");
-        require(mSuccess, "Merchant payment failed");
-
-        if (order.rider != address(0)) {
-            (bool rSuccess, ) = order.rider.call{value: riderAmount}("");
-            require(rSuccess, "Rider payment failed");
-        }
-        // 如果没有骑手（自配送），骑手费归协议
-
-        emit OrderCompleted(_orderId, merchantAmount, riderAmount, protocolAmount);
+        _settleOrder(_orderId, order);
     }
 
     /**
@@ -263,19 +244,36 @@ contract OrderContract {
         } else {
             // 强制完成分账
             order.status = OrderStatus.Completed;
-            uint256 merchantAmount = (order.amount * merchantShare) / 100;
-            uint256 riderAmount = (order.amount * riderShare) / 100;
-            uint256 protocolAmount = order.amount - merchantAmount - riderAmount;
-            protocolFees += protocolAmount;
-
-            (bool mSuccess, ) = order.merchant.call{value: merchantAmount}("");
-            require(mSuccess, "Merchant payment failed");
-            if (order.rider != address(0)) {
-                (bool rSuccess, ) = order.rider.call{value: riderAmount}("");
-                require(rSuccess, "Rider payment failed");
-            }
-            emit OrderCompleted(_orderId, merchantAmount, riderAmount, protocolAmount);
+            _settleOrder(_orderId, order);
         }
+    }
+
+    /**
+     * @dev 统一结算逻辑，避免正常确认和争议裁决的资金分配规则不一致。
+     * 有骑手：按 merchantShare/riderShare 分账；无骑手：骑手份额归商家。
+     */
+    function _settleOrder(uint256 _orderId, Order storage order) internal {
+        uint256 merchantAmount = (order.amount * merchantShare) / 100;
+        uint256 riderAmount = 0;
+
+        if (order.rider != address(0)) {
+            riderAmount = (order.amount * riderShare) / 100;
+        } else {
+            merchantAmount += (order.amount * riderShare) / 100;
+        }
+
+        uint256 protocolAmount = order.amount - merchantAmount - riderAmount;
+        protocolFees += protocolAmount;
+
+        (bool mSuccess, ) = order.merchant.call{value: merchantAmount}("");
+        require(mSuccess, "Merchant payment failed");
+
+        if (riderAmount > 0) {
+            (bool rSuccess, ) = order.rider.call{value: riderAmount}("");
+            require(rSuccess, "Rider payment failed");
+        }
+
+        emit OrderCompleted(_orderId, merchantAmount, riderAmount, protocolAmount);
     }
 
     /**

@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🔮 平台控制台 - Web3 外卖</title>
+<script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+  <script src="./config.js"></script>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: #0a0a0a;
+    color: #e0e0e0;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Inter', sans-serif;
+    min-height: 100vh;
+    padding: 20px;
+    padding-bottom: 80px;
+  }
+
+  /* Network bar */
+  .network-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    background: #141414;
+    border: 1px solid #1e1e1e;
+    border-radius: 12px;
+    padding: 14px 20px;
+    margin-bottom: 24px;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .network-info { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; }
+  .network-name { font-weight: 600; font-size: 15px; color: #9c27b0; }
+  .contract-addr { font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 13px; color: #888; }
+  .block-number { font-family: 'SF Mono', 'JetBrains Mono', monospace; font-size: 14px; color: #bbb; }
+  .block-number span { color: #9c27b0; }
+  .status-dot {
+    display: inline-block; width: 10px; height: 10px; border-radius: 50%;
+    margin-right: 6px; vertical-align: middle;
+  }
+  .status-dot.online { background: #4caf50; box-shadow: 0 0 8px rgba(76,175,80,0.6); }
+  .status-dot.offline { background: #f44336; box-shadow: 0 0 8px rgba(244,67,54,0.6); }
+  .status-text { font-size: 13px; color: #888; }
+
+  .network-switch { display: flex; gap: 6px; }
+  .network-switch button {
+    background: #1e1e1e; color: #888; border: 1px solid #2a2a2a;
+    padding: 6px 14px; border-radius: 8px; cursor: pointer; font-size: 13px;
+    transition: all 0.2s;
+  }
+  .network-switch button:hover { background: #2a2a2a; color: #ccc; }
+  .network-switch button.active {
+    background: #9c27b0; color: #fff; border-color: #9c27b0;
+  }
+
+  /* Header */
+  .header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 24px; flex-wrap: wrap; gap: 12px;
+  }
+  .header h1 { font-size: 26px; font-weight: 700; color: #9c27b0; letter-spacing: 1px; }
+  .header-right { display: flex; align-items: center; gap: 14px; }
+  .last-update { font-size: 13px; color: #666; font-family: 'SF Mono', monospace; }
+  .refresh-btn {
+    background: #9c27b0; color: #fff; border: none; padding: 8px 18px;
+    border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600;
+    transition: all 0.2s;
+  }
+  .refresh-btn:hover { background: #7b1fa2; transform: scale(1.03); }
+  .refresh-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
+  /* Error banner */
+  .error-banner {
+    background: #2d0a0a; border: 1px solid #5c1a1a; border-radius: 10px;
+    padding: 16px 20px; margin-bottom: 20px; color: #ef9a9a; font-size: 14px;
+    display: none;
+  }
+  .error-banner.visible { display: block; }
+  .error-banner code {
+    background: #1e0a0a; padding: 2px 8px; border-radius: 4px; font-family: 'SF Mono', monospace;
+  }
+
+  /* Dashboard cards */
+  .dashboard-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 24px;
+  }
+  @media (max-width: 900px) { .dashboard-grid { grid-template-columns: repeat(2, 1fr); } }
+  @media (max-width: 500px) { .dashboard-grid { grid-template-columns: 1fr; } }
+  .dash-card {
+    background: #141414; border: 1px solid #1e1e1e; border-radius: 12px;
+    padding: 20px; position: relative; overflow: hidden;
+    box-shadow: 0 0 20px rgba(156,39,176,0.05);
+    transition: box-shadow 0.3s;
+  }
+  .dash-card:hover { box-shadow: 0 0 30px rgba(156,39,176,0.12); }
+  .dash-card .label { font-size: 13px; color: #666; margin-bottom: 8px; display: flex; align-items: center; gap: 6px; }
+  .dash-card .value {
+    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+    font-size: 32px; font-weight: 700; color: #fff; line-height: 1.2;
+  }
+  .dash-card .value.small { font-size: 26px; }
+
+  /* Fee split */
+  .fee-section { margin-bottom: 24px; }
+  .fee-section h2 { font-size: 16px; color: #888; margin-bottom: 14px; }
+  .fee-bars { display: flex; gap: 12px; align-items: flex-end; }
+  .fee-bar-group { flex: 1; }
+  .fee-bar-group .fee-label { font-size: 12px; color: #888; margin-bottom: 6px; text-align: center; }
+  .fee-bar-group .fee-pct { font-size: 18px; font-weight: 700; text-align: center; margin-bottom: 4px; font-family: 'SF Mono', monospace; }
+  .fee-bar-track {
+    height: 24px; background: #1e1e1e; border-radius: 6px; overflow: hidden; position: relative;
+  }
+  .fee-bar-fill {
+    height: 100%; border-radius: 6px; transition: width 0.6s ease; min-width: 4px;
+  }
+  .fee-bar-fill.merchant { background: linear-gradient(90deg, #7c4dff, #9c27b0); }
+  .fee-bar-fill.rider { background: linear-gradient(90deg, #448aff, #536dfe); }
+  .fee-bar-fill.protocol { background: linear-gradient(90deg, #ff6d00, #ff9100); }
+
+  /* Status distribution */
+  .status-section { margin-bottom: 24px; }
+  .status-section h2 { font-size: 16px; color: #888; margin-bottom: 14px; }
+  .status-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  @media (max-width: 700px) { .status-grid { grid-template-columns: repeat(2, 1fr); } }
+  .status-item { background: #141414; border: 1px solid #1e1e1e; border-radius: 8px; padding: 12px; }
+  .status-item .s-label { font-size: 12px; color: #666; margin-bottom: 4px; }
+  .status-item .s-count { font-size: 20px; font-weight: 700; font-family: 'SF Mono', monospace; }
+  .status-item .s-bar {
+    height: 6px; background: #1e1e1e; border-radius: 3px; margin-top: 8px; overflow: hidden;
+  }
+  .status-item .s-bar-fill { height: 100%; border-radius: 3px; transition: width 0.5s; min-width: 2px; }
+
+  .color-pending { color: #ffc107; }
+  .color-accepted { color: #2196f3; }
+  .color-delivering { color: #ff9800; }
+  .color-delivered { color: #9c27b0; }
+  .color-completed { color: #4caf50; }
+  .color-cancelled { color: #9e9e9e; }
+  .color-disputed { color: #f44336; }
+
+  .bg-pending { background: #ffc107; }
+  .bg-accepted { background: #2196f3; }
+  .bg-delivering { background: #ff9800; }
+  .bg-delivered { background: #9c27b0; }
+  .bg-completed { background: #4caf50; }
+  .bg-cancelled { background: #9e9e9e; }
+  .bg-disputed { background: #f44336; }
+
+  /* Order table */
+  .orders-section { margin-bottom: 24px; }
+  .orders-section h2 { font-size: 16px; color: #888; margin-bottom: 14px; }
+  .table-wrap { overflow-x: auto; }
+  table {
+    width: 100%; border-collapse: collapse; background: #141414;
+    border: 1px solid #1e1e1e; border-radius: 10px; overflow: hidden;
+  }
+  th, td { padding: 10px 14px; text-align: left; font-size: 13px; white-space: nowrap; }
+  th { background: #1a1a1a; color: #888; font-weight: 600; border-bottom: 1px solid #1e1e1e; }
+  td { border-bottom: 1px solid #1a1a1a; font-family: 'SF Mono', 'JetBrains Mono', monospace; }
+  tr:last-child td { border-bottom: none; }
+  tr:hover td { background: #1a1a1a; }
+  .status-badge {
+    display: inline-block; padding: 3px 10px; border-radius: 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .status-badge.pending { background: #ffc10722; color: #ffc107; }
+  .status-badge.accepted { background: #2196f322; color: #2196f3; }
+  .status-badge.delivering { background: #ff980022; color: #ff9800; }
+  .status-badge.delivered { background: #9c27b022; color: #9c27b0; }
+  .status-badge.completed { background: #4caf5022; color: #4caf50; }
+  .status-badge.cancelled { background: #9e9e9e22; color: #9e9e9e; }
+  .status-badge.disputed { background: #f4433622; color: #f44336; }
+
+  .no-orders { text-align: center; padding: 40px 20px; color: #666; font-size: 14px; }
+
+  /* Event stream */
+  .events-section { margin-bottom: 24px; }
+  .events-section h2 { font-size: 16px; color: #888; margin-bottom: 14px; }
+  .event-list { background: #141414; border: 1px solid #1e1e1e; border-radius: 10px; padding: 0; max-height: 400px; overflow-y: auto; }
+  .event-item {
+    padding: 10px 16px; border-bottom: 1px solid #1a1a1a;
+    font-size: 13px; display: flex; align-items: center; gap: 12px;
+    font-family: 'SF Mono', 'JetBrains Mono', monospace;
+    animation: slideIn 0.3s ease;
+  }
+  .event-item:last-child { border-bottom: none; }
+  .event-time { color: #666; font-size: 12px; white-space: nowrap; }
+  .event-type { font-weight: 600; min-width: 100px; }
+  .event-data { color: #bbb; flex: 1; }
+  @keyframes slideIn {
+    from { opacity: 0; transform: translateY(-8px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+
+  /* Bottom nav */
+  .bottom-nav {
+    position: fixed; bottom: 0; left: 0; right: 0;
+    background: #141414; border-top: 1px solid #1e1e1e;
+    display: flex; justify-content: center; gap: 4px;
+    padding: 10px 16px; z-index: 100;
+  }
+  .bottom-nav a {
+    text-decoration: none; color: #666; padding: 8px 18px;
+    border-radius: 10px; font-size: 13px; font-weight: 500;
+    transition: all 0.2s; white-space: nowrap;
+  }
+  .bottom-nav a:hover { background: #1e1e1e; color: #ccc; }
+  .bottom-nav a.active { background: rgba(156,39,176,0.15); color: #9c27b0; font-weight: 600; }
+
+  /* Scrollbar */
+  ::-webkit-scrollbar { width: 6px; }
+  ::-webkit-scrollbar-track { background: #141414; }
+  ::-webkit-scrollbar-thumb { background: #333; border-radius: 3px; }
+  ::-webkit-scrollbar-thumb:hover { background: #444; }
+</style>
+</head>
+<body>
+
+<!-- Network Bar -->
+<div class="network-bar">
+  <div class="network-info">
+    <span class="status-dot online" id="statusDot"></span>
+    <span class="network-name" id="networkName">Localhost</span>
+    <span class="contract-addr" id="contractAddr">0x0165...2Eb8F</span>
+    <span class="block-number">⛓️ <span id="blockNumber">0</span></span>
+    <span class="status-text" id="statusText">已连接</span>
+  </div>
+  <div class="network-switch">
+    <button class="active" data-chain="31337" data-rpc="http://127.0.0.1:8545" data-addr="" data-name="Localhost (31337)">🏠 Hardhat</button>
+    <button data-chain="10143" data-rpc="https://testnet-rpc.monad.xyz" data-addr="" data-name="Monad Testnet (10143)">🌕 Monad</button>
+  </div>
+</div>
+
+<!-- Header -->
+<div class="header">
+  <h1>🔮 平台控制台</h1>
+  <div class="header-right">
+    <span class="last-update" id="lastUpdate">最后更新: --:--:--</span>
+    <button class="refresh-btn" id="refreshBtn" onclick="refreshAll()">🔄 立即刷新</button>
+  </div>
+</div>
+
+<!-- Error Banner -->
+<div class="error-banner" id="errorBanner">
+  ⚠ <span id="errorMsg">节点未启动，请先运行 <code>npx hardhat node</code></span>
+</div>
+
+<!-- Dashboard Cards -->
+<div class="dashboard-grid">
+  <div class="dash-card">
+    <div class="label">📦 总订单数</div>
+    <div class="value" id="totalOrders">--</div>
+  </div>
+  <div class="dash-card">
+    <div class="label">💰 协议金库</div>
+    <div class="value" id="protocolFees">--</div>
+  </div>
+  <div class="dash-card">
+    <div class="label">✅ 完成率</div>
+    <div class="value" id="completionRate">--</div>
+  </div>
+  <div class="dash-card">
+    <div class="label">💵 总交易量</div>
+    <div class="value" id="totalVolume">--</div>
+  </div>
+</div>
+
+<!-- Fee Split -->
+<div class="fee-section">
+  <h2>📊 分账比例</h2>
+  <div class="fee-bars" id="feeBars">
+    <div class="fee-bar-group">
+      <div class="fee-pct merchant-color" id="merchantPct">0%</div>
+      <div class="fee-label">🏪 商家</div>
+      <div class="fee-bar-track"><div class="fee-bar-fill merchant" id="merchantBar" style="width:0%"></div></div>
+    </div>
+    <div class="fee-bar-group">
+      <div class="fee-pct" id="riderPct" style="color:#536dfe">0%</div>
+      <div class="fee-label">🛵 骑手</div>
+      <div class="fee-bar-track"><div class="fee-bar-fill rider" id="riderBar" style="width:0%"></div></div>
+    </div>
+    <div class="fee-bar-group">
+      <div class="fee-pct" id="protocolPct" style="color:#ff9100">0%</div>
+      <div class="fee-label">🔮 协议</div>
+      <div class="fee-bar-track"><div class="fee-bar-fill protocol" id="protocolBar" style="width:0%"></div></div>
+    </div>
+  </div>
+</div>
+
+<!-- Status Distribution -->
+<div class="status-section">
+  <h2>📈 订单状态分布</h2>
+  <div class="status-grid" id="statusGrid"></div>
+</div>
+
+<!-- Orders Table -->
+<div class="orders-section">
+  <h2>📋 全部订单</h2>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>#ID</th>
+          <th>用户</th>
+          <th>商家</th>
+          <th>骑手</th>
+          <th>金额</th>
+          <th>状态</th>
+          <th>时间</th>
+        </tr>
+      </thead>
+      <tbody id="ordersBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<!-- Event Stream -->
+<div class="events-section">
+  <h2>⚡ 实时事件流</h2>
+  <div class="event-list" id="eventList">
+    <div class="event-item" style="color:#666;justify-content:center;font-family:inherit">等待事件...</div>
+  </div>
+</div>
+
+<!-- Bottom Nav -->
+<div class="bottom-nav">
+  <a href="customer.html">👤 用户端</a>
+  <a href="merchant.html">🏪 商家端</a>
+  <a href="rider.html">🛵 骑手端</a>
+  <a href="admin.html" class="active">🔮 平台端</a>
+</div>
+
+<script>
+const STATUS_MAP = ['Pending','Accepted','Delivering','Delivered','Completed','Cancelled','Disputed'];
+const STATUS_COLORS = {
+  Pending: 'pending', Accepted: 'accepted', Delivering: 'delivering',
+  Delivered: 'delivered', Completed: 'completed', Cancelled: 'cancelled', Disputed: 'disputed'
+};
+const STATUS_ICONS = { Pending:'⏳', Accepted:'📋', Delivering:'🛵', Delivered:'📦', Completed:'✅', Cancelled:'❌', Disputed:'⚖️' };
+
+// --- State ---
+let provider, contract, networkCfg;
+let ordersCache = [];
+let eventsCache = [];
+let refreshTimer, blockTimer, eventTimer;
+let isRefreshing = false;
+
+const CONFIGS = Object.fromEntries(
+  Object.entries(window.WEB3_FOOD_CONFIG.networks).map(([chainId, cfg]) => [
+    chainId, {
+      rpc: cfg.rpc,
+      addr: cfg.contractAddress,
+      name: `${cfg.name} (${chainId})`,
+      currency: cfg.currency
+    }
+  ])
+);
+
+const ABI = [
+  'function orderCount() view returns (uint256)',
+  'function protocolFees() view returns (uint256)',
+  'function merchantShare() view returns (uint256)',
+  'function riderShare() view returns (uint256)',
+  'function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))',
+  'event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)',
+  'event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)'
+];
+
+// --- Init ---
+function initNetwork(chainId) {
+  networkCfg = CONFIGS[chainId];
+  if (!networkCfg) return;
+  provider = new ethers.JsonRpcProvider(networkCfg.rpc);
+  contract = new ethers.Contract(networkCfg.addr, ABI, provider);
+
+  document.querySelectorAll('.network-switch button').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.network-switch button[data-chain="${chainId}"]`).classList.add('active');
+  document.getElementById('networkName').textContent = networkCfg.name;
+  const addr = networkCfg.addr;
+  document.getElementById('contractAddr').textContent = addr.slice(0,10) + '...' + addr.slice(-6);
+
+  document.querySelectorAll('.dash-card .value').forEach(el => {
+    if (el.id !== 'totalOrders' && el.id !== 'completionRate') {
+      const suffix = chainId === '10143' ? ' MON' : ' ETH';
+      el.dataset.suffix = suffix;
+    }
+  });
+
+  refreshAll();
+}
+
+// --- Network Switch ---
+document.querySelectorAll('.network-switch button').forEach(btn => {
+  btn.addEventListener('click', function() {
+    const chain = this.dataset.chain;
+    initNetwork(chain);
+  });
+});
+
+// --- Connect ---
+async function connect() {
+  try {
+    await provider.getBlockNumber();
+    document.getElementById('statusDot').className = 'status-dot online';
+    document.getElementById('statusText').textContent = '已连接';
+    document.getElementById('errorBanner').classList.remove('visible');
+    return true;
+  } catch (e) {
+    document.getElementById('statusDot').className = 'status-dot offline';
+    document.getElementById('statusText').textContent = '未连接';
+    document.getElementById('errorBanner').classList.add('visible');
+    document.getElementById('errorMsg').textContent = '节点未启动，请先运行 npx hardhat node（当前: ' + networkCfg.rpc + '）';
+    return false;
+  }
+}
+
+// --- Block Height ---
+async function updateBlockNumber() {
+  try {
+    const bn = await provider.getBlockNumber();
+    document.getElementById('blockNumber').textContent = bn;
+  } catch (e) {}
+}
+
+// --- Fetch all orders ---
+async function fetchAllOrders() {
+  try {
+    const count = await contract.orderCount();
+    const countNum = Number(count);
+    document.getElementById('totalOrders').textContent = countNum;
+
+    if (countNum === 0) {
+      ordersCache = [];
+      renderOrdersTable();
+      updateDashboard(null, countNum);
+      return [];
+    }
+
+    const promises = [];
+    for (let i = 1; i <= countNum; i++) {
+      promises.push(contract.getOrder(i));
+    }
+    const raw = await Promise.all(promises);
+
+    const orders = raw.map((o, idx) => ({
+      id: Number(o.id),
+      customer: o.customer,
+      merchant: o.merchant,
+      rider: o.rider,
+      amount: o.amount,
+      timestamp: Number(o.timestamp),
+      status: Number(o.status),
+      metadata: o.metadata
+    }));
+
+    // Sort desc by id
+    orders.sort((a, b) => b.id - a.id);
+    ordersCache = orders;
+    renderOrdersTable();
+    updateDashboard(orders, countNum);
+    return orders;
+  } catch (e) {
+    console.error('fetchAllOrders error', e);
+    throw e;
+  }
+}
+
+// --- Update Dashboard ---
+function updateDashboard(orders, count) {
+  const suffix = networkCfg.currency === 'MON' ? ' MON' : ' ETH';
+
+  // Protocol fees
+  contract.protocolFees().then(f => {
+    document.getElementById('protocolFees').textContent = ethers.formatEther(f) + suffix;
+  }).catch(() => {});
+
+  // Merchant / Rider share
+  Promise.all([contract.merchantShare(), contract.riderShare()]).then(([ms, rs]) => {
+    const m = Number(ms), r = Number(rs);
+    const total = m + r;
+    if (total > 0) {
+      const mp = (m / total * 100).toFixed(1);
+      const rp = (r / total * 100).toFixed(1);
+      const pp = (100 - parseFloat(mp) - parseFloat(rp)).toFixed(1);
+      document.getElementById('merchantPct').textContent = mp + '%';
+      document.getElementById('riderPct').textContent = rp + '%';
+      document.getElementById('protocolPct').textContent = pp + '%';
+      document.getElementById('merchantBar').style.width = mp + '%';
+      document.getElementById('riderBar').style.width = rp + '%';
+      document.getElementById('protocolBar').style.width = pp + '%';
+    }
+  }).catch(() => {});
+
+  // Completion rate & total volume
+  if (orders && orders.length > 0) {
+    const completed = orders.filter(o => o.status === 4).length;
+    const rate = (completed / count * 100).toFixed(1);
+    document.getElementById('completionRate').textContent = rate + '%';
+
+    const totalVol = orders.reduce((sum, o) => sum + o.amount, 0n);
+    document.getElementById('totalVolume').textContent = ethers.formatEther(totalVol) + suffix;
+  } else {
+    document.getElementById('completionRate').textContent = '0%';
+    document.getElementById('totalVolume').textContent = '0' + suffix;
+  }
+
+  // Status distribution
+  renderStatusDistribution(orders || [], count);
+}
+
+// --- Status Distribution ---
+function renderStatusDistribution(orders, total) {
+  if (!orders) orders = ordersCache;
+  const labels = ['Pending','Accepted','Delivering','Delivered','Completed','Cancelled','Disputed'];
+  const counts = new Array(7).fill(0);
+  orders.forEach(o => { if (o.status < 7) counts[o.status]++; });
+  const maxCount = Math.max(...counts, 1);
+
+  const grid = document.getElementById('statusGrid');
+  grid.innerHTML = '';
+  labels.forEach((label, i) => {
+    const c = counts[i];
+    const pct = total > 0 ? (c / total * 100).toFixed(1) : '0.0';
+    const barPct = (c / maxCount * 100).toFixed(1);
+    const colorClass = STATUS_COLORS[label];
+    const icon = STATUS_ICONS[label] || '';
+    grid.innerHTML += `
+      <div class="status-item">
+        <div class="s-label">${icon} ${label}</div>
+        <div class="s-count color-${colorClass}">${c}</div>
+        <div class="s-bar"><div class="s-bar-fill bg-${colorClass}" style="width:${barPct}%"></div></div>
+        <div style="font-size:11px;color:#555;margin-top:4px">${pct}%</div>
+      </div>
+    `;
+  });
+}
+
+// --- Orders Table ---
+function renderOrdersTable() {
+  const body = document.getElementById('ordersBody');
+  if (ordersCache.length === 0) {
+    body.innerHTML = '<tr><td colspan="7" class="no-orders">暂无订单，等待三端产生交易数据</td></tr>';
+    return;
+  }
+
+  body.innerHTML = ordersCache.map(o => {
+    const statusLabel = STATUS_MAP[o.status] || 'Unknown';
+    const colorClass = STATUS_COLORS[statusLabel] || 'cancelled';
+    const time = o.timestamp > 0 ? new Date(o.timestamp * 1000).toLocaleString() : '--';
+    const rider = o.rider && o.rider !== '0x0000000000000000000000000000000000000000'
+      ? o.rider.slice(0, 8) + '...' : '待抢单';
+    const suffix = networkCfg.currency === 'MON' ? ' MON' : ' ETH';
+    return `<tr>
+      <td>#${o.id}</td>
+      <td title="${o.customer}">${o.customer.slice(0, 8)}...</td>
+      <td title="${o.merchant}">${o.merchant.slice(0, 8)}...</td>
+      <td title="${rider === '待抢单' ? '' : o.rider}" style="color:${rider === '待抢单' ? '#ff9800' : 'inherit'}">${rider}</td>
+      <td>${ethers.formatEther(o.amount)} ${suffix}</td>
+      <td><span class="status-badge ${colorClass}">${statusLabel}</span></td>
+      <td>${time}</td>
+    </tr>`;
+  }).join('');
+}
+
+// --- Refresh All ---
+async function refreshAll() {
+  if (isRefreshing) return;
+  isRefreshing = true;
+  document.getElementById('refreshBtn').disabled = true;
+
+  try {
+    const ok = await connect();
+    if (!ok) {
+      document.getElementById('totalOrders').textContent = '--';
+      document.getElementById('protocolFees').textContent = '--';
+      document.getElementById('completionRate').textContent = '--';
+      document.getElementById('totalVolume').textContent = '--';
+      document.getElementById('ordersBody').innerHTML =
+        '<tr><td colspan="7" class="no-orders">⚠ 节点未连接，无法读取数据</td></tr>';
+      document.getElementById('statusGrid').innerHTML =
+        '<div class="status-item" style="grid-column:1/-1;text-align:center;color:#666">等待连接...</div>';
+      isRefreshing = false;
+      document.getElementById('refreshBtn').disabled = false;
+      return;
+    }
+
+    await updateBlockNumber();
+    await fetchAllOrders();
+    document.getElementById('lastUpdate').textContent =
+      '最后更新: ' + new Date().toLocaleTimeString();
+  } catch (e) {
+    console.error('refreshAll error', e);
+  }
+  isRefreshing = false;
+  document.getElementById('refreshBtn').disabled = false;
+}
+
+// --- Event Listener ---
+async function setupEventListener() {
+  if (!contract) return;
+  try {
+    contract.on('OrderCreated', (orderId, customer, amount, event) => {
+      const time = new Date().toLocaleTimeString();
+      const id = Number(orderId);
+      const amt = ethers.formatEther(amount);
+      const suffix = networkCfg.currency === 'MON' ? ' MON' : ' ETH';
+      addEvent(`🆕 订单 #${id} 已创建`, `用户 ${customer.slice(0,8)}...  金额 ${amt} ${suffix}`, time);
+
+      // Refresh data
+      refreshAll();
+    });
+
+    contract.on('OrderCompleted', (orderId, merchantAmt, riderAmt, protocolAmt, event) => {
+      const time = new Date().toLocaleTimeString();
+      const id = Number(orderId);
+      const suffix = networkCfg.currency === 'MON' ? ' MON' : ' ETH';
+      addEvent(`✅ 订单 #${id} 已完成`,
+        `商家 +${ethers.formatEther(merchantAmt)} | 骑手 +${ethers.formatEther(riderAmt)} | 协议 +${ethers.formatEther(protocolAmt)} ${suffix}`,
+        time);
+
+      // Refresh data
+      refreshAll();
+    });
+  } catch (e) {
+    console.error('setupEventListener error', e);
+  }
+}
+
+// --- Add Event ---
+function addEvent(type, data, time) {
+  const list = document.getElementById('eventList');
+  if (eventsCache.length === 0) {
+    list.innerHTML = '';
+  }
+  const el = document.createElement('div');
+  el.className = 'event-item';
+  el.innerHTML = `<span class="event-time">${time}</span><span class="event-type">${type}</span><span class="event-data">${data}</span>`;
+  list.insertBefore(el, list.firstChild);
+
+  eventsCache.unshift({ type, data, time });
+  if (eventsCache.length > 10) {
+    eventsCache.pop();
+    if (list.children.length > 10) {
+      list.removeChild(list.lastChild);
+    }
+  }
+}
+
+// --- Init ---
+async function init() {
+  initNetwork('31337');
+  setupEventListener();
+
+  // Block number refresh every 5s
+  blockTimer = setInterval(updateBlockNumber, 5000);
+
+  // Data refresh every 10s
+  refreshTimer = setInterval(refreshAll, 10000);
+
+  // Poll for events fallback every 5s (for providers that don't support WebSocket events well)
+  eventTimer = setInterval(async () => {
+    // Just refresh periodically; events come via logs
+  }, 5000);
+}
+
+init();
+</script>
+</body>
+</html>

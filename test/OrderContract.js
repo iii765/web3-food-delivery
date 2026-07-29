@@ -81,9 +81,9 @@ describe("OrderContract - Web3外卖平台", function () {
       ).to.be.revertedWith("Only merchant");
     });
 
-    it("分配骑手", async () => {
+    it("骑手抢单", async () => {
       await contract.connect(merchant).acceptOrder(orderId);
-      await contract.connect(merchant).assignRider(orderId, rider.address);
+      await contract.connect(rider).claimOrder(orderId);
 
       const order = await contract.getOrder(orderId);
       expect(order.rider).to.equal(rider.address);
@@ -92,7 +92,7 @@ describe("OrderContract - Web3外卖平台", function () {
 
     it("骑手确认送达", async () => {
       await contract.connect(merchant).acceptOrder(orderId);
-      await contract.connect(merchant).assignRider(orderId, rider.address);
+      await contract.connect(rider).claimOrder(orderId);
       await contract.connect(rider).confirmDelivery(orderId);
 
       const order = await contract.getOrder(orderId);
@@ -102,7 +102,7 @@ describe("OrderContract - Web3外卖平台", function () {
     it("用户确认收货→自动分账（核心测试）", async () => {
       // 走完流程
       await contract.connect(merchant).acceptOrder(orderId);
-      await contract.connect(merchant).assignRider(orderId, rider.address);
+      await contract.connect(rider).claimOrder(orderId);
       await contract.connect(rider).confirmDelivery(orderId);
 
       await expect(
@@ -123,6 +123,26 @@ describe("OrderContract - Web3外卖平台", function () {
       // 协议费累积
       const fees = await contract.protocolFees();
       expect(fees).to.equal((ORDER_AMOUNT * 3n) / 100n);
+    });
+
+    it("无骑手的自配送订单：商家拿97%，协议拿3%，不遗留资金", async () => {
+      await contract.connect(merchant).acceptOrder(orderId);
+      await contract.connect(customer).disputeOrder(orderId, "商家自配送，用户已收货");
+
+      await expect(
+        contract.connect(owner).resolveDispute(orderId, false)
+      )
+        .to.emit(contract, "OrderCompleted")
+        .withArgs(
+          orderId,
+          (ORDER_AMOUNT * 97n) / 100n,
+          0,
+          (ORDER_AMOUNT * 3n) / 100n
+        );
+
+      expect(await ethers.provider.getBalance(await contract.getAddress()))
+        .to.equal((ORDER_AMOUNT * 3n) / 100n);
+      expect(await contract.protocolFees()).to.equal((ORDER_AMOUNT * 3n) / 100n);
     });
   });
 

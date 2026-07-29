@@ -1,0 +1,747 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>用户端 - Web3 外卖</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+  <script src="./config.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+    .container { max-width: 480px; margin: 0 auto; padding: 16px 16px 80px; }
+
+    /* Header */
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0; position: sticky; top: 0; background: #0f0f0f; z-index: 10;
+    }
+    .role-badge {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 20px; font-weight: 700;
+    }
+    .role-dot {
+      width: 12px; height: 12px; border-radius: 50%;
+      background: #4CAF50; flex-shrink: 0;
+    }
+    .role-badge.customer .role-dot { background: #4CAF50; }
+    .wallet-section { display: flex; align-items: center; gap: 8px; }
+    .wallet-btn {
+      background: #2a2a2a; color: #e0e0e0; border: 1px solid #333;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer;
+      transition: .2s; white-space: nowrap;
+    }
+    .wallet-btn:hover { background: #333; }
+    .wallet-addr {
+      font-size: 12px; color: #888; background: #1a1a1a;
+      padding: 4px 10px; border-radius: 12px; font-family: monospace;
+    }
+
+    /* Network Toggle */
+    .network-toggle {
+      display: flex; gap: 0; margin: 8px 0 16px; background: #1a1a1a;
+      border-radius: 10px; overflow: hidden; border: 1px solid #2a2a2a;
+    }
+    .network-btn {
+      flex: 1; padding: 8px 0; text-align: center; font-size: 13px;
+      cursor: pointer; transition: .2s; border: none; background: transparent; color: #666;
+    }
+    .network-btn.active {
+      background: #4CAF50; color: #fff; font-weight: 600;
+    }
+    .network-btn:not(.active):hover { color: #aaa; }
+
+    /* Card */
+    .card {
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-title::before { content: ''; display: inline-block; width: 4px; height: 14px; border-radius: 2px; background: #4CAF50; }
+
+    /* Form */
+    .form-group { margin-bottom: 12px; }
+    .form-label { display: block; font-size: 13px; color: #999; margin-bottom: 4px; }
+    .form-input {
+      width: 100%; padding: 10px 12px; background: #242424; border: 1px solid #333;
+      border-radius: 8px; color: #e0e0e0; font-size: 14px; outline: none; transition: .2s;
+    }
+    .form-input:focus { border-color: #4CAF50; }
+    .form-input::placeholder { color: #555; }
+    textarea.form-input { resize: vertical; min-height: 60px; font-family: inherit; }
+
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: .2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #4CAF50; color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: #43a047; }
+    .btn-sm {
+      padding: 6px 14px; font-size: 12px; border-radius: 8px;
+    }
+    .btn-success { background: #4CAF50; color: #fff; }
+    .btn-success:hover:not(:disabled) { background: #43a047; }
+    .btn-danger { background: #e53935; color: #fff; }
+    .btn-danger:hover:not(:disabled) { background: #c62828; }
+    .btn-outline {
+      background: transparent; border: 1px solid #4CAF50; color: #4CAF50;
+    }
+    .btn-outline:hover:not(:disabled) { background: rgba(76,175,80,0.1); }
+
+    .order-amount {
+      font-size: 24px; font-weight: 700; color: #4CAF50; margin: 8px 0;
+    }
+    .amount-unit { font-size: 14px; color: #888; }
+
+    /* Status Progress Bar */
+    .status-track {
+      display: flex; align-items: center; justify-content: space-between;
+      margin: 16px 0; padding: 0 4px;
+    }
+    .status-step {
+      display: flex; flex-direction: column; align-items: center; gap: 4px;
+      flex: 1; position: relative;
+    }
+    .status-circle {
+      width: 22px; height: 22px; border-radius: 50%;
+      background: #2a2a2a; border: 2px solid #333;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 10px; color: #666; transition: .3s; z-index: 1;
+    }
+    .status-circle.active {
+      background: #4CAF50; border-color: #4CAF50; color: #fff;
+    }
+    .status-circle.done {
+      background: #4CAF50; border-color: #4CAF50; color: #fff;
+    }
+    .status-label {
+      font-size: 10px; color: #555; text-align: center; white-space: nowrap;
+    }
+    .status-label.active { color: #4CAF50; font-weight: 500; }
+    .status-line {
+      position: absolute; top: 11px; left: calc(50% + 12px);
+      right: calc(-50% + 12px); height: 2px; background: #2a2a2a;
+    }
+    .status-line.done { background: #4CAF50; }
+
+    /* Order Status Badge */
+    .status-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600;
+    }
+    .status-Pending { background: #f9a825; color: #1a1a1a; }
+    .status-Accepted { background: #42a5f5; color: #fff; }
+    .status-Delivering { background: #7e57c2; color: #fff; }
+    .status-Delivered { background: #26a69a; color: #fff; }
+    .status-Completed { background: #4CAF50; color: #fff; }
+    .status-Cancelled { background: #e53935; color: #fff; }
+    .status-Disputed { background: #ff7043; color: #fff; }
+
+    /* Order Actions */
+    .order-actions {
+      display: flex; gap: 8px; flex-wrap: wrap; margin-top: 12px;
+    }
+
+    /* Split display */
+    .split-display {
+      margin-top: 12px; padding: 12px; background: #242424; border-radius: 10px;
+    }
+    .split-title { font-size: 12px; color: #888; margin-bottom: 8px; }
+    .split-row {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 4px 0; font-size: 13px;
+    }
+    .split-row .value { font-weight: 600; }
+    .split-row.merchant .value { color: #FF9800; }
+    .split-row.rider .value { color: #2196F3; }
+    .split-row.protocol .value { color: #9e9e9e; }
+    .split-row.total .value { color: #4CAF50; }
+
+    /* Orders List */
+    .history-order {
+      padding: 12px 0; border-bottom: 1px solid #2a2a2a; font-size: 13px;
+    }
+    .history-order:last-child { border-bottom: none; }
+    .history-order-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;
+    }
+    .history-order-id { color: #888; font-family: monospace; font-size: 11px; }
+    .history-order-meta { color: #666; font-size: 12px; }
+    .history-order-amount { font-weight: 600; }
+
+    .empty-state {
+      text-align: center; padding: 24px 0; color: #555; font-size: 14px;
+    }
+
+    /* Navigation */
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #1a1a1a; border-top: 1px solid #2a2a2a;
+      display: flex; justify-content: space-around; padding: 8px 0;
+      max-width: 480px; margin: 0 auto; z-index: 20;
+    }
+    .nav-link {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      text-decoration: none; font-size: 11px; color: #555; padding: 4px 12px;
+      border-radius: 8px; transition: .2s;
+    }
+    .nav-link:hover { color: #ccc; }
+    .nav-link.active { color: #4CAF50; background: rgba(76,175,80,0.1); }
+    .nav-icon { font-size: 18px; }
+    .nav-link.customer-link { color: #4CAF50; }
+    .nav-link.merchant-link { color: #FF9800; }
+    .nav-link.rider-link { color: #2196F3; }
+
+    .loading-spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #333; border-top-color: #4CAF50;
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .hidden { display: none; }
+    .mt-8 { margin-top: 8px; }
+    .mt-12 { margin-top: 12px; }
+    .mb-8 { margin-bottom: 8px; }
+    .gap-8 { gap: 8px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <div class="role-badge customer">
+        <span class="role-dot"></span>
+        <span>用户端</span>
+      </div>
+      <div class="wallet-section">
+        <span class="wallet-addr hidden" id="walletAddr"></span>
+        <button class="wallet-btn" id="connectBtn">连接钱包</button>
+      </div>
+    </div>
+
+    <!-- Network Toggle -->
+    <div class="network-toggle">
+      <button class="network-btn active" data-chainid="31337" data-rpc="http://127.0.0.1:8545">本地链</button>
+      <button class="network-btn" data-chainid="10143" data-rpc="https://testnet-rpc.monad.xyz/">Monad Testnet</button>
+    </div>
+
+    <!-- Create Order -->
+    <div class="card">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#4CAF50,#4CAF50);">创建新订单</div>
+      <div class="form-group">
+        <label class="form-label">商家地址</label>
+        <input class="form-input" id="merchantAddr" placeholder="0x..." />
+      </div>
+      <div class="form-group">
+        <label class="form-label">订单金额 (ETH)</label>
+        <input class="form-input" id="orderAmount" type="number" step="0.001" min="0.001" placeholder="0.01" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">菜品备注</label>
+        <textarea class="form-input" id="orderMetadata" placeholder="例：1份宫保鸡丁 + 1份米饭" rows="2"></textarea>
+      </div>
+      <button class="btn btn-primary" id="createOrderBtn" disabled>创建订单</button>
+    </div>
+
+    <!-- Current Order Display -->
+    <div class="card hidden" id="currentOrderCard">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#4CAF50,#4CAF50);">当前订单</div>
+      <div id="currentOrderInfo"></div>
+    </div>
+
+    <!-- History Orders -->
+    <div class="card">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#4CAF50,#4CAF50);">我的历史订单</div>
+      <div id="historyOrders"><div class="empty-state">暂无订单</div></div>
+    </div>
+  </div>
+
+  <!-- Bottom Nav -->
+  <div class="bottom-nav">
+    <a class="nav-link customer-link active" href="customer.html">
+      <span class="nav-icon">👤</span>用户端
+    </a>
+    <a class="nav-link merchant-link" href="merchant.html">
+      <span class="nav-icon">🏪</span>商家端
+    </a>
+    <a class="nav-link rider-link" href="rider.html">
+      <span class="nav-icon">🛵</span>骑手端
+    </a>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      // -------- CONFIG --------
+      const CONTRACTS = Object.fromEntries(
+        Object.entries(window.WEB3_FOOD_CONFIG.networks).map(([chainId, cfg]) => [
+          chainId, { address: cfg.contractAddress, rpc: cfg.rpc }
+        ])
+      );
+      const ABI = [
+        "function createOrder(address merchant, string metadata) payable returns (uint256)",
+        "function acceptOrder(uint256 orderId)",
+        "function claimOrder(uint256 orderId)",
+        "function confirmDelivery(uint256 orderId)",
+        "function confirmReceipt(uint256 orderId)",
+        "function cancelOrder(uint256 orderId)",
+        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
+        "function orderCount() view returns (uint256)",
+        "event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)",
+        "event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)"
+      ];
+      const STATUS_NAMES = ['Pending','Accepted','Delivering','Delivered','Completed','Cancelled','Disputed'];
+      const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+
+      // -------- STATE --------
+      let provider, signer, contract;
+      let currentAccount = null;
+      let selectedChainId = '31337';
+      let selectedRpc = 'http://127.0.0.1:8545';
+      let pollTimer = null;
+      let currentDisplayOrderId = null;
+
+      // -------- DOM --------
+      const connectBtn = document.getElementById('connectBtn');
+      const walletAddr = document.getElementById('walletAddr');
+      const merchantInput = document.getElementById('merchantAddr');
+      const amountInput = document.getElementById('orderAmount');
+      const metadataInput = document.getElementById('orderMetadata');
+      const createBtn = document.getElementById('createOrderBtn');
+      const currentOrderCard = document.getElementById('currentOrderCard');
+      const currentOrderInfo = document.getElementById('currentOrderInfo');
+      const historyContainer = document.getElementById('historyOrders');
+      const netBtns = document.querySelectorAll('.network-btn');
+
+      // -------- HELPERS --------
+      function shortAddr(addr) {
+        if (!addr) return '';
+        return addr.substring(0, 6) + '...' + addr.substring(addr.length - 4);
+      }
+
+      function getContract(networkChainId) {
+        const cfg = CONTRACTS[networkChainId || selectedChainId] || CONTRACTS['31337'];
+        return new ethers.Contract(cfg.address, ABI, signer || provider);
+      }
+
+      function friendlyError(err) {
+        const msg = (err && err.message) ? err.message : String(err);
+        if (msg.includes('user rejected') || msg.includes('User denied')) return '操作已取消';
+        if (msg.includes('insufficient funds')) return '账户余额不足';
+        if (msg.includes('execution reverted')) return '交易执行失败，请检查订单状态或权限';
+        if (msg.includes('network') || msg.includes('timeout')) return '网络连接异常，请检查网络后重试';
+        return '操作失败，请重试';
+      }
+
+      // -------- WALLET --------
+      async function connectWallet(requestAccess = true) {
+        if (!window.ethereum) {
+          alert('请安装 MetaMask 浏览器插件');
+          return false;
+        }
+        try {
+          const accounts = await window.ethereum.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' });
+          if (accounts.length === 0) return false;
+          currentAccount = accounts[0].toLowerCase();
+          walletAddr.textContent = shortAddr(accounts[0]);
+          walletAddr.classList.remove('hidden');
+          connectBtn.textContent = '已连接';
+          connectBtn.style.borderColor = '#4CAF50';
+          connectBtn.style.color = '#4CAF50';
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+          contract = getContract();
+          createBtn.disabled = false;
+          // check chain
+          const network = await provider.getNetwork();
+          const netId = String(network.chainId);
+          if (netId !== selectedChainId) {
+            await switchNetwork(selectedChainId, selectedRpc);
+          }
+          return true;
+        } catch (e) {
+          alert('连接钱包失败：' + friendlyError(e));
+          return false;
+        }
+      }
+
+      async function switchNetwork(chainId, rpcUrl) {
+        if (!window.ethereum) return;
+        const hexId = '0x' + parseInt(chainId).toString(16);
+        const cfg = CONTRACTS[chainId];
+        try {
+          await window.ethereum.request({
+            method: 'wallet_switchEthereumChain',
+            params: [{ chainId: hexId }]
+          });
+        } catch (e) {
+          if (e.code === 4902) {
+            const chainName = chainId === '31337' ? 'Localhost 8545' : 'Monad Testnet';
+            const explorer = chainId === '10143' ? 'https://testnet.monadexplorer.com/' : '';
+            try {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: hexId,
+                  chainName,
+                  rpcUrls: [rpcUrl],
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  blockExplorerUrls: explorer ? [explorer] : []
+                }]
+              });
+            } catch (e2) {
+              throw e2;
+            }
+          } else {
+            throw e;
+          }
+        }
+      }
+
+      // -------- NETWORK TOGGLE --------
+      netBtns.forEach(btn => {
+        btn.addEventListener('click', async function() {
+          netBtns.forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          selectedChainId = this.dataset.chainid;
+          selectedRpc = this.dataset.rpc;
+          if (currentAccount) {
+            try {
+              await switchNetwork(selectedChainId, selectedRpc);
+              provider = new ethers.BrowserProvider(window.ethereum);
+              signer = await provider.getSigner();
+              contract = getContract();
+              refreshAll();
+            } catch (e) {
+              alert('切换网络失败：' + friendlyError(e));
+            }
+          }
+        });
+      });
+
+      // -------- accountsChanged --------
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', function(accounts) {
+          if (accounts.length === 0) {
+            currentAccount = null;
+            walletAddr.classList.add('hidden');
+            connectBtn.textContent = '连接钱包';
+            connectBtn.style.borderColor = '#333';
+            connectBtn.style.color = '#e0e0e0';
+            createBtn.disabled = true;
+            currentOrderCard.classList.add('hidden');
+            historyContainer.innerHTML = '<div class="empty-state">暂无订单</div>';
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          } else {
+            currentAccount = accounts[0].toLowerCase();
+            location.reload();
+          }
+        });
+        window.ethereum.on('chainChanged', function() {
+          location.reload();
+        });
+      }
+
+      // -------- ORDER RENDER --------
+      function getStatusName(s) {
+        return STATUS_NAMES[s] || 'Unknown';
+      }
+
+      function renderSingleOrder(order) {
+        const status = Number(order.status);
+        const sName = getStatusName(status);
+        const isCustomer = currentAccount && order.customer.toLowerCase() === currentAccount;
+
+        // Status steps
+        const steps = ['Pending','Accepted','Delivering','Delivered','Completed'];
+        const stepIndex = status <= 4 ? status : -1;
+        let stepHtml = '<div class="status-track">';
+        steps.forEach((step, i) => {
+          let cls = 'status-circle';
+          if (stepIndex >= 4 && i <= 4) cls += ' done';
+          else if (i < stepIndex) cls += ' done';
+          else if (i === stepIndex) cls += ' active';
+          let labelCls = 'status-label' + (i === stepIndex ? ' active' : '');
+          let lineCls = 'status-line' + (i < stepIndex ? ' done' : '');
+          stepHtml += `<div class="status-step">`;
+          if (i < steps.length - 1) stepHtml += `<div class="${lineCls}"></div>`;
+          stepHtml += `<div class="${cls}">${i < stepIndex ? '✓' : (i === stepIndex ? '●' : '')}</div>`;
+          stepHtml += `<div class="${labelCls}">${step}</div>`;
+          stepHtml += `</div>`;
+        });
+        stepHtml += '</div>';
+
+        const merchantAddr = order.merchant;
+        const riderAddr = order.rider;
+        const amountEth = ethers.formatEther(order.amount);
+
+        let detailsHtml = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:13px;margin-bottom:8px;">
+            <div><span style="color:#888">订单ID</span><br><span style="font-family:monospace;color:#4CAF50">${order.id.toString()}</span></div>
+            <div><span style="color:#888">金额</span><br><span style="font-weight:600">${amountEth} ETH</span></div>
+            <div style="grid-column:span 2"><span style="color:#888">商家</span><br><span style="font-family:monospace;font-size:12px">${shortAddr(merchantAddr)}</span></div>
+            ${riderAddr !== ZERO_ADDR ? `<div style="grid-column:span 2"><span style="color:#888">骑手</span><br><span style="font-family:monospace;font-size:12px">${shortAddr(riderAddr)}</span></div>` : ''}
+            <div style="grid-column:span 2"><span style="color:#888">备注</span><br>${order.metadata || '(无)'}</div>
+            <div style="grid-column:span 2"><span style="color:#888">状态</span><br><span class="status-badge status-${sName}">${sName}</span></div>
+          </div>
+        `;
+
+        // Actions
+        let actionsHtml = '<div class="order-actions">';
+
+        // Cancel (only Pending, only customer)
+        if (status === 0 && isCustomer) {
+          actionsHtml += `<button class="btn btn-sm btn-danger" onclick="window.cancelOrderAction('${order.id}')">取消订单</button>`;
+        }
+        // Confirm Receipt (only Delivered, only customer)
+        if (status === 3 && isCustomer) {
+          actionsHtml += `<button class="btn btn-sm btn-success" onclick="window.confirmReceiptAction('${order.id}')">确认收货</button>`;
+        }
+        actionsHtml += '</div>';
+
+        // Split display if completed
+        let splitHtml = '';
+        if (status === 4) {
+          const totalWei = BigInt(order.amount);
+          const merchantWei = totalWei * 85n / 100n;
+          const riderWei = totalWei * 12n / 100n;
+          const protocolWei = totalWei * 3n / 100n;
+          splitHtml = `
+            <div class="split-display">
+              <div class="split-title">分账明细 (85/12/3)</div>
+              <div class="split-row merchant"><span>👨‍🍳 商家 (85%)</span><span class="value">${ethers.formatEther(merchantWei)} ETH</span></div>
+              <div class="split-row rider"><span>🛵 骑手 (12%)</span><span class="value">${ethers.formatEther(riderWei)} ETH</span></div>
+              <div class="split-row protocol"><span>🔗 协议 (3%)</span><span class="value">${ethers.formatEther(protocolWei)} ETH</span></div>
+              <div class="split-row total" style="border-top:1px solid #333;padding-top:6px;margin-top:4px;">
+                <span>合计</span><span class="value">${amountEth} ETH</span>
+              </div>
+            </div>
+          `;
+        }
+
+        return stepHtml + detailsHtml + actionsHtml + splitHtml;
+      }
+
+      // -------- LOAD CURRENT ORDER --------
+      async function loadCurrentOrder(orderId) {
+        if (!currentAccount || !contract) return;
+        try {
+          const order = await contract.getOrder(orderId);
+          if (!order || order.customer.toLowerCase() !== currentAccount) {
+            currentOrderCard.classList.add('hidden');
+            currentDisplayOrderId = null;
+            return;
+          }
+          currentDisplayOrderId = orderId;
+          currentOrderCard.classList.remove('hidden');
+          currentOrderInfo.innerHTML = renderSingleOrder(order);
+        } catch (e) {
+          currentOrderCard.classList.add('hidden');
+          currentDisplayOrderId = null;
+        }
+      }
+
+      async function loadLatestOrder() {
+        if (!currentAccount || !contract) return;
+        try {
+          const cnt = await contract.orderCount();
+          if (cnt === 0n) {
+            currentOrderCard.classList.add('hidden');
+            currentDisplayOrderId = null;
+            return;
+          }
+          // Start from newest, find our order
+          const start = Number(cnt);
+          const maxLook = Math.min(20, Number(cnt));
+          for (let i = start; i >= Math.max(1, start - maxLook + 1); i--) {
+            try {
+              const order = await contract.getOrder(i);
+              if (order.customer.toLowerCase() === currentAccount) {
+                await loadCurrentOrder(i);
+                return;
+              }
+            } catch(_) {}
+          }
+          currentOrderCard.classList.add('hidden');
+          currentDisplayOrderId = null;
+        } catch(e) {
+          currentOrderCard.classList.add('hidden');
+        }
+      }
+
+      // -------- HISTORY ORDERS --------
+      async function loadHistoryOrders() {
+        if (!currentAccount || !contract) {
+          historyContainer.innerHTML = '<div class="empty-state">请先连接钱包</div>';
+          return;
+        }
+        try {
+          const cnt = await contract.orderCount();
+          const myOrders = [];
+          const start = Number(cnt);
+          const limit = 20;
+          for (let i = start; i >= Math.max(1, start - limit + 1) && myOrders.length < 10; i--) {
+            try {
+              const order = await contract.getOrder(i);
+              if (order.customer.toLowerCase() === currentAccount) {
+                myOrders.push(order);
+              }
+            } catch(_) {}
+          }
+          if (myOrders.length === 0) {
+            historyContainer.innerHTML = '<div class="empty-state">暂无历史订单</div>';
+            return;
+          }
+          let html = '';
+          myOrders.forEach(o => {
+            const s = Number(o.status);
+            const sName = getStatusName(s);
+            const ts = new Date(Number(o.timestamp) * 1000);
+            html += `
+              <div class="history-order" onclick="window.viewOrder('${o.id}')" style="cursor:pointer">
+                <div class="history-order-header">
+                  <span class="history-order-id">#${o.id.toString()} · ${ts.toLocaleString('zh-CN')}</span>
+                  <span class="status-badge status-${sName}">${sName}</span>
+                </div>
+                <div class="history-order-meta">
+                  商家: ${shortAddr(o.merchant)} · 备注: ${(o.metadata || '(无)').substring(0, 20)}
+                </div>
+                <div style="display:flex;justify-content:space-between;align-items:center;margin-top:4px">
+                  <span class="history-order-amount">${ethers.formatEther(o.amount)} ETH</span>
+                  <span style="font-size:11px;color:#4CAF50">点击查看 →</span>
+                </div>
+              </div>
+            `;
+          });
+          historyContainer.innerHTML = html;
+        } catch(e) {
+          historyContainer.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
+        }
+      }
+
+      // -------- POLLING --------
+      function startPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(() => {
+          if (currentAccount && contract) {
+            if (currentDisplayOrderId !== null) {
+              loadCurrentOrder(currentDisplayOrderId);
+            } else {
+              loadLatestOrder();
+            }
+            loadHistoryOrders();
+          }
+        }, 5000);
+      }
+
+      function refreshAll() {
+        loadLatestOrder();
+        loadHistoryOrders();
+      }
+
+      // -------- ACTIONS (exposed to onclick) --------
+      window.viewOrder = function(orderId) {
+        loadCurrentOrder(orderId);
+      };
+
+      window.cancelOrderAction = async function(orderId) {
+        if (!contract || !currentAccount) return;
+        try {
+          const tx = await contract.cancelOrder(orderId);
+          const receipt = await tx.wait();
+          if (receipt.status !== 1) throw new Error('交易已上链但执行失败');
+          refreshAll();
+          alert(`取消成功，链上交易：${tx.hash.slice(0, 10)}...`);
+        } catch (e) {
+          alert(friendlyError(e));
+        }
+      };
+
+      window.confirmReceiptAction = async function(orderId) {
+        if (!contract || !currentAccount) return;
+        try {
+          const tx = await contract.confirmReceipt(orderId);
+          const receipt = await tx.wait();
+          if (receipt.status !== 1) throw new Error('交易已上链但执行失败');
+          refreshAll();
+          alert(`确认收货成功，链上交易：${tx.hash.slice(0, 10)}...`);
+        } catch (e) {
+          alert(friendlyError(e));
+        }
+      };
+
+      // -------- CREATE ORDER --------
+      createBtn.addEventListener('click', async function() {
+        const merchant = merchantInput.value.trim();
+        const amount = amountInput.value.trim();
+        const metadata = metadataInput.value.trim();
+
+        if (!ethers.isAddress(merchant)) {
+          alert('请输入有效的商家地址');
+          return;
+        }
+        if (!amount || parseFloat(amount) <= 0) {
+          alert('请输入有效的订单金额');
+          return;
+        }
+        if (!metadata) {
+          alert('请输入菜品备注');
+          return;
+        }
+
+        try {
+          const amountWei = ethers.parseEther(amount);
+          const tx = await contract.createOrder(merchant, metadata, { value: amountWei });
+          const receipt = await tx.wait();
+          if (receipt.status !== 1) throw new Error('交易已上链但执行失败');
+          // Find OrderCreated event
+          let orderId = null;
+          for (const log of receipt.logs) {
+            try {
+              const parsed = contract.interface.parseLog({ topics: log.topics, data: log.data });
+              if (parsed && parsed.name === 'OrderCreated') {
+                orderId = parsed.args.orderId;
+                break;
+              }
+            } catch(_) {}
+          }
+          // Clear form
+          merchantInput.value = '';
+          amountInput.value = '';
+          metadataInput.value = '';
+          if (orderId !== null) {
+            await loadCurrentOrder(orderId);
+          }
+          loadHistoryOrders();
+          alert(`订单创建成功！订单ID: ${orderId !== null ? orderId.toString() : '(请查看列表)'}`);
+        } catch (e) {
+          alert(friendlyError(e));
+        }
+      });
+
+      // -------- CONNECT --------
+      connectBtn.addEventListener('click', async function() {
+        await connectWallet();
+        if (currentAccount) {
+          refreshAll();
+          startPolling();
+        }
+      });
+
+      // 不自动连接：角色页必须由用户主动点击“连接钱包”，避免跨页面显示过期的钱包状态。
+
+    })();
+  </script>
+</body>
+</html>

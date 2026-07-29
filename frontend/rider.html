@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>骑手端 - Web3 外卖</title>
+  <script src="https://cdn.jsdelivr.net/npm/ethers@6.13.0/dist/ethers.umd.min.js"></script>
+  <script src="./config.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+    .container { max-width: 480px; margin: 0 auto; padding: 16px 16px 80px; }
+
+    .header {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 16px 0; position: sticky; top: 0; background: #0f0f0f; z-index: 10;
+    }
+    .role-badge {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 20px; font-weight: 700;
+    }
+    .role-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+    .role-badge.rider .role-dot { background: #2196F3; }
+    .wallet-section { display: flex; align-items: center; gap: 8px; }
+    .wallet-btn {
+      background: #2a2a2a; color: #e0e0e0; border: 1px solid #333;
+      padding: 6px 14px; border-radius: 20px; font-size: 13px; cursor: pointer;
+      transition: .2s; white-space: nowrap;
+    }
+    .wallet-btn:hover { background: #333; }
+    .wallet-addr {
+      font-size: 12px; color: #888; background: #1a1a1a;
+      padding: 4px 10px; border-radius: 12px; font-family: monospace;
+    }
+
+    .network-toggle {
+      display: flex; gap: 0; margin: 8px 0 16px; background: #1a1a1a;
+      border-radius: 10px; overflow: hidden; border: 1px solid #2a2a2a;
+    }
+    .network-btn {
+      flex: 1; padding: 8px 0; text-align: center; font-size: 13px;
+      cursor: pointer; transition: .2s; border: none; background: transparent; color: #666;
+    }
+    .network-btn.active { background: #2196F3; color: #fff; font-weight: 600; }
+    .network-btn:not(.active):hover { color: #aaa; }
+
+    .card {
+      background: #1a1a1a; border: 1px solid #2a2a2a;
+      border-radius: 14px; padding: 16px; margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 600; margin-bottom: 12px;
+      display: flex; align-items: center; gap: 6px;
+    }
+    .card-title::before { content: ''; display: inline-block; width: 4px; height: 14px; border-radius: 2px; background: #2196F3; }
+
+    .btn {
+      padding: 10px 20px; border: none; border-radius: 10px;
+      font-size: 14px; font-weight: 600; cursor: pointer; transition: .2s;
+    }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: #2196F3; color: #fff; width: 100%; }
+    .btn-primary:hover:not(:disabled) { background: #1976d2; }
+    .btn-sm { padding: 6px 14px; font-size: 12px; border-radius: 8px; }
+    .btn-claim { background: #2196F3; color: #fff; }
+    .btn-claim:hover:not(:disabled) { background: #1976d2; }
+    .btn-deliver { background: #26a69a; color: #fff; }
+    .btn-deliver:hover:not(:disabled) { background: #00897b; }
+
+    .order-item {
+      padding: 12px 0; border-bottom: 1px solid #2a2a2a; font-size: 13px;
+    }
+    .order-item:last-child { border-bottom: none; }
+    .order-item-header {
+      display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;
+    }
+    .order-id { color: #2196F3; font-family: monospace; font-size: 12px; font-weight: 600; }
+    .order-meta { color: #888; font-size: 12px; line-height: 1.6; }
+    .order-amount { font-weight: 600; color: #2196F3; }
+    .order-reward { font-size: 12px; color: #26a69a; }
+    .order-actions { margin-top: 8px; display: flex; gap: 8px; }
+
+    .status-badge {
+      display: inline-block; padding: 3px 10px; border-radius: 12px;
+      font-size: 11px; font-weight: 600;
+    }
+    .status-Pending { background: #f9a825; color: #1a1a1a; }
+    .status-Accepted { background: #42a5f5; color: #fff; }
+    .status-Delivering { background: #7e57c2; color: #fff; }
+    .status-Delivered { background: #26a69a; color: #fff; }
+    .status-Completed { background: #4CAF50; color: #fff; }
+    .status-Cancelled { background: #e53935; color: #fff; }
+    .status-Disputed { background: #ff7043; color: #fff; }
+
+    .empty-state { text-align: center; padding: 24px 0; color: #555; font-size: 14px; }
+    .section-count { font-size: 12px; color: #888; font-weight: 400; }
+
+    .bottom-nav {
+      position: fixed; bottom: 0; left: 0; right: 0;
+      background: #1a1a1a; border-top: 1px solid #2a2a2a;
+      display: flex; justify-content: space-around; padding: 8px 0;
+      max-width: 480px; margin: 0 auto; z-index: 20;
+    }
+    .nav-link {
+      display: flex; flex-direction: column; align-items: center; gap: 2px;
+      text-decoration: none; font-size: 11px; color: #555; padding: 4px 12px;
+      border-radius: 8px; transition: .2s;
+    }
+    .nav-link:hover { color: #ccc; }
+    .nav-link.active { color: #2196F3; background: rgba(33,150,243,0.1); }
+    .nav-icon { font-size: 18px; }
+    .nav-link.customer-link { color: #4CAF50; }
+    .nav-link.merchant-link { color: #FF9800; }
+    .nav-link.rider-link { color: #2196F3; }
+
+    .loading-spinner {
+      display: inline-block; width: 14px; height: 14px;
+      border: 2px solid #333; border-top-color: #2196F3;
+      border-radius: 50%; animation: spin .6s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <div class="header">
+      <div class="role-badge rider">
+        <span class="role-dot"></span>
+        <span>骑手端</span>
+      </div>
+      <div class="wallet-section">
+        <span class="wallet-addr hidden" id="walletAddr"></span>
+        <button class="wallet-btn" id="connectBtn">连接钱包</button>
+      </div>
+    </div>
+
+    <div class="network-toggle">
+      <button class="network-btn active" data-chainid="31337" data-rpc="http://127.0.0.1:8545">本地链</button>
+      <button class="network-btn" data-chainid="10143" data-rpc="https://testnet-rpc.monad.xyz/">Monad Testnet</button>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#2196F3,#2196F3);">
+        可抢订单 <span class="section-count" id="availableCount"></span>
+      </div>
+      <div id="availableOrders"><div class="empty-state">加载中...</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#2196F3,#2196F3);">
+        我的配送 <span class="section-count" id="deliveringCount"></span>
+      </div>
+      <div id="deliveringOrders"><div class="empty-state">暂无配送订单</div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-title" style="background-image:linear-gradient(90deg,#2196F3,#2196F3);">
+        配送历史 <span class="section-count" id="historyCount"></span>
+      </div>
+      <div id="historyOrders"><div class="empty-state">暂无配送历史</div></div>
+    </div>
+  </div>
+
+  <div class="bottom-nav">
+    <a class="nav-link customer-link" href="customer.html">
+      <span class="nav-icon">👤</span>用户端
+    </a>
+    <a class="nav-link merchant-link" href="merchant.html">
+      <span class="nav-icon">🏪</span>商家端
+    </a>
+    <a class="nav-link rider-link active" href="rider.html">
+      <span class="nav-icon">🛵</span>骑手端
+    </a>
+  </div>
+
+  <script>
+    (function() {
+      'use strict';
+
+      const CONTRACTS = Object.fromEntries(
+        Object.entries(window.WEB3_FOOD_CONFIG.networks).map(([chainId, cfg]) => [
+          chainId, { address: cfg.contractAddress, rpc: cfg.rpc }
+        ])
+      );
+      const ABI = [
+        "function createOrder(address merchant, string metadata) payable returns (uint256)",
+        "function acceptOrder(uint256 orderId)",
+        "function claimOrder(uint256 orderId)",
+        "function confirmDelivery(uint256 orderId)",
+        "function confirmReceipt(uint256 orderId)",
+        "function cancelOrder(uint256 orderId)",
+        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
+        "function orderCount() view returns (uint256)",
+        "event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)",
+        "event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)"
+      ];
+      const STATUS_NAMES = ['Pending','Accepted','Delivering','Delivered','Completed','Cancelled','Disputed'];
+      const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
+
+      let provider, signer, contract;
+      let currentAccount = null;
+      let selectedChainId = '31337';
+      let selectedRpc = 'http://127.0.0.1:8545';
+      let pollTimer = null;
+
+      const connectBtn = document.getElementById('connectBtn');
+      const walletAddr = document.getElementById('walletAddr');
+      const availableContainer = document.getElementById('availableOrders');
+      const deliveringContainer = document.getElementById('deliveringOrders');
+      const historyContainer = document.getElementById('historyOrders');
+      const availableCount = document.getElementById('availableCount');
+      const deliveringCount = document.getElementById('deliveringCount');
+      const historyCount = document.getElementById('historyCount');
+      const netBtns = document.querySelectorAll('.network-btn');
+
+      function shortAddr(addr) {
+        if (!addr) return '';
+        return addr.substring(0, 6) + '...' + addr.substring(addr.length - 4);
+      }
+
+      function getContract(networkChainId) {
+        const cfg = CONTRACTS[networkChainId || selectedChainId] || CONTRACTS['31337'];
+        return new ethers.Contract(cfg.address, ABI, signer || provider);
+      }
+
+      function friendlyError(err) {
+        const msg = (err && err.message) ? err.message : String(err);
+        if (msg.includes('user rejected') || msg.includes('User denied')) return '操作已取消';
+        if (msg.includes('insufficient funds')) return '账户余额不足';
+        if (msg.includes('execution reverted')) return '交易执行失败，请检查订单状态或权限';
+        if (msg.includes('network') || msg.includes('timeout')) return '网络连接异常，请检查网络后重试';
+        return '操作失败，请重试';
+      }
+
+      async function connectWallet(requestAccess = true) {
+        if (!window.ethereum) {
+          alert('请安装 MetaMask 浏览器插件');
+          return false;
+        }
+        try {
+          const accounts = await window.ethereum.request({ method: requestAccess ? 'eth_requestAccounts' : 'eth_accounts' });
+          if (accounts.length === 0) return false;
+          currentAccount = accounts[0].toLowerCase();
+          walletAddr.textContent = shortAddr(accounts[0]);
+          walletAddr.classList.remove('hidden');
+          connectBtn.textContent = '已连接';
+          connectBtn.style.borderColor = '#2196F3';
+          connectBtn.style.color = '#2196F3';
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+          contract = getContract();
+          const network = await provider.getNetwork();
+          const netId = String(network.chainId);
+          if (netId !== selectedChainId) {
+            await switchNetwork(selectedChainId, selectedRpc);
+          }
+          return true;
+        } catch (e) {
+          alert('连接钱包失败：' + friendlyError(e));
+          return false;
+        }
+      }
+
+      async function switchNetwork(chainId, rpcUrl) {
+        if (!window.ethereum) return;
+        const hexId = '0x' + parseInt(chainId).toString(16);
+        try {
+          await window.ethereum.request({ method: 'wallet_switchEthereumChain', params: [{ chainId: hexId }] });
+        } catch (e) {
+          if (e.code === 4902) {
+            const chainName = chainId === '31337' ? 'Localhost 8545' : 'Monad Testnet';
+            const explorer = chainId === '10143' ? 'https://testnet.monadexplorer.com/' : '';
+            try {
+              await window.ethereum.request({
+                method: 'wallet_addEthereumChain',
+                params: [{
+                  chainId: hexId, chainName,
+                  rpcUrls: [rpcUrl],
+                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  blockExplorerUrls: explorer ? [explorer] : []
+                }]
+              });
+            } catch (e2) { throw e2; }
+          } else { throw e; }
+        }
+      }
+
+      netBtns.forEach(btn => {
+        btn.addEventListener('click', async function() {
+          netBtns.forEach(b => b.classList.remove('active'));
+          this.classList.add('active');
+          selectedChainId = this.dataset.chainid;
+          selectedRpc = this.dataset.rpc;
+          if (currentAccount) {
+            try {
+              await switchNetwork(selectedChainId, selectedRpc);
+              provider = new ethers.BrowserProvider(window.ethereum);
+              signer = await provider.getSigner();
+              contract = getContract();
+              loadAllOrders();
+            } catch (e) { alert('切换网络失败：' + friendlyError(e)); }
+          }
+        });
+      });
+
+      if (window.ethereum) {
+        window.ethereum.on('accountsChanged', function(accounts) {
+          if (accounts.length === 0) {
+            currentAccount = null;
+            walletAddr.classList.add('hidden');
+            connectBtn.textContent = '连接钱包';
+            connectBtn.style.borderColor = '#333';
+            connectBtn.style.color = '#e0e0e0';
+            availableContainer.innerHTML = '<div class="empty-state">请先连接钱包</div>';
+            deliveringContainer.innerHTML = '<div class="empty-state">请先连接钱包</div>';
+            availableCount.textContent = '';
+            deliveringCount.textContent = '';
+            if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+          } else { currentAccount = accounts[0].toLowerCase(); location.reload(); }
+        });
+        window.ethereum.on('chainChanged', function() { location.reload(); });
+      }
+
+      async function loadAllOrders() {
+        if (!currentAccount || !contract) {
+          availableContainer.innerHTML = '<div class="empty-state">请先连接钱包</div>';
+          deliveringContainer.innerHTML = '<div class="empty-state">请先连接钱包</div>';
+          return;
+        }
+        try {
+          const cnt = await contract.orderCount();
+          const available = [];
+          const delivering = [];
+          const history = [];
+
+          for (let i = 1; i <= Number(cnt); i++) {
+            try {
+              const order = await contract.getOrder(i);
+              const status = Number(order.status);
+              if (status === 1 && order.rider.toLowerCase() === ZERO_ADDR) {
+                available.push(order);
+              }
+              if (status === 2 && order.rider.toLowerCase() === currentAccount) {
+                delivering.push(order);
+              }
+              if ((status === 3 || status === 4) && order.rider.toLowerCase() === currentAccount) {
+                history.push(order);
+              }
+            } catch(_) {}
+          }
+
+          availableCount.textContent = `(${available.length})`;
+          if (available.length === 0) {
+            availableContainer.innerHTML = '<div class="empty-state">暂无可用订单</div>';
+          } else {
+            let html = '';
+            available.forEach(o => {
+              const ts = new Date(Number(o.timestamp) * 1000);
+              const rewardWei = BigInt(o.amount) * 12n / 100n;
+              html += `<div class="order-item">
+                <div class="order-item-header">
+                  <span class="order-id">#${o.id.toString()}</span>
+                  <span class="order-amount">${ethers.formatEther(o.amount)} ETH</span>
+                </div>
+                <div class="order-meta">
+                  商家: ${shortAddr(o.merchant)}<br>
+                  用户: ${shortAddr(o.customer)}<br>
+                  下单: ${ts.toLocaleString('zh-CN')}
+                </div>
+                <div class="order-reward">🏆 骑手收益: ${ethers.formatEther(rewardWei)} ETH (12%)</div>
+                <div class="order-actions">
+                  <button class="btn btn-sm btn-claim" onclick="window.claimOrder('${o.id}')">抢单</button>
+                </div>
+              </div>`;
+            });
+            availableContainer.innerHTML = html;
+          }
+
+          deliveringCount.textContent = `(${delivering.length})`;
+          if (delivering.length === 0) {
+            deliveringContainer.innerHTML = '<div class="empty-state">暂无配送订单</div>';
+          } else {
+            let html = '';
+            delivering.forEach(o => {
+              const ts = new Date(Number(o.timestamp) * 1000);
+              html += `<div class="order-item">
+                <div class="order-item-header">
+                  <span class="order-id">#${o.id.toString()}</span>
+                  <span class="status-badge status-Delivering">Delivering</span>
+                </div>
+                <div class="order-meta">
+                  商家: ${shortAddr(o.merchant)}<br>
+                  用户: ${shortAddr(o.customer)}<br>
+                  金额: ${ethers.formatEther(o.amount)} ETH<br>
+                  下单: ${ts.toLocaleString('zh-CN')}
+                </div>
+                <div class="order-actions">
+                  <button class="btn btn-sm btn-deliver" onclick="window.confirmDeliveryAction('${o.id}')">确认送达</button>
+                </div>
+              </div>`;
+            });
+            deliveringContainer.innerHTML = html;
+          }
+
+          history.sort((a, b) => Number(b.id) - Number(a.id));
+          historyCount.textContent = `(${history.length})`;
+          if (history.length === 0) {
+            historyContainer.innerHTML = '<div class="empty-state">暂无配送历史</div>';
+          } else {
+            historyContainer.innerHTML = history.map(o => {
+              const status = Number(o.status);
+              const statusText = status === 4 ? '已完成' : '已送达，待用户确认';
+              const ts = new Date(Number(o.timestamp) * 1000);
+              const rewardWei = BigInt(o.amount) * 12n / 100n;
+              return `<div class="order-item">
+                <div class="order-item-header">
+                  <span class="order-id">#${o.id.toString()}</span>
+                  <span class="status-badge status-${STATUS_NAMES[status]}">${statusText}</span>
+                </div>
+                <div class="order-meta">商家: ${shortAddr(o.merchant)}<br>用户: ${shortAddr(o.customer)}<br>备注: ${o.metadata || '(无)'}<br>下单: ${ts.toLocaleString('zh-CN')}</div>
+                <div class="order-reward">骑手收益: ${ethers.formatEther(rewardWei)} ETH (12%)</div>
+              </div>`;
+            }).join('');
+          }
+        } catch (e) {
+          availableContainer.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
+          deliveringContainer.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
+          historyContainer.innerHTML = '<div class="empty-state">加载失败，请重试</div>';
+        }
+      }
+
+      window.claimOrder = async function(orderId) {
+        if (!contract || !currentAccount) return;
+        try {
+          const tx = await contract.claimOrder(orderId);
+          const receipt = await tx.wait();
+          if (receipt.status !== 1) throw new Error('交易已上链但执行失败');
+          await loadAllOrders();
+          alert(`抢单成功，链上交易：${tx.hash.slice(0, 10)}...`);
+        } catch (e) { alert(friendlyError(e)); }
+      };
+
+      window.confirmDeliveryAction = async function(orderId) {
+        if (!contract || !currentAccount) return;
+        try {
+          const tx = await contract.confirmDelivery(orderId);
+          const receipt = await tx.wait();
+          if (receipt.status !== 1) throw new Error('交易已上链但执行失败');
+          await loadAllOrders();
+          alert(`确认送达成功，链上交易：${tx.hash.slice(0, 10)}...`);
+        } catch (e) { alert(friendlyError(e)); }
+      };
+
+      function startPolling() {
+        if (pollTimer) clearInterval(pollTimer);
+        pollTimer = setInterval(() => {
+          if (currentAccount && contract) loadAllOrders();
+        }, 5000);
+      }
+
+      function refreshOrders() { loadAllOrders(); }
+
+      connectBtn.addEventListener('click', async function() {
+        await connectWallet();
+        if (currentAccount) { refreshOrders(); startPolling(); }
+      });
+
+      // 不自动连接：角色页必须由用户主动点击“连接钱包”，避免跨页面显示过期的钱包状态。
+    })();
+  </script>
+</body>
+</html>

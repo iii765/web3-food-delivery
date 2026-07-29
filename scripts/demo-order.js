@@ -1,9 +1,12 @@
-// 本地链完整演示：下单 → 接单 → 配送 → 分账
+// 本地链完整演示：自动部署 → 下单 → 接单 → 骑手抢单 → 配送 → 分账
 const hre = require("hardhat");
 
 async function main() {
-  const addr = "0x5FbDB2315678afecb367f032d93F642f64180aa3";
-  const contract = await hre.ethers.getContractAt("OrderContract", addr);
+  // 自动部署，不依赖硬编码地址
+  const OrderContract = await hre.ethers.getContractFactory("OrderContract");
+  const contract = await OrderContract.deploy();
+  await contract.waitForDeployment();
+  console.log(`🚀 合约部署到: ${await contract.getAddress()}\n`);
 
   // 本地链账户：0=customer, 1=merchant, 2=rider
   const [customer, merchant, rider] = await hre.ethers.getSigners();
@@ -32,11 +35,11 @@ async function main() {
   await tx2.wait();
   console.log("   ✅ 商家已接单 | 状态: Accepted\n");
 
-  // 3. 分配骑手
-  console.log("🛵 [3/5] 分配骑手...");
-  const tx3 = await contract.connect(merchant).assignRider(1, rider.address);
+  // 3. 骑手抢单（claimOrder，骑手主动接）
+  console.log("🛵 [3/5] 骑手抢单...");
+  const tx3 = await contract.connect(rider).claimOrder(1);
   await tx3.wait();
-  console.log("   ✅ 骑手已分配 | 状态: Delivering\n");
+  console.log("   ✅ 骑手已抢单 | 状态: Delivering\n");
 
   // 4. 骑手送达
   console.log("📬 [4/5] 骑手送达...");
@@ -47,11 +50,10 @@ async function main() {
   // 5. 用户确认收货 → 分账
   console.log("💸 [5/5] 用户确认收货 → 自动分账...");
   const tx5 = await contract.connect(customer).confirmReceipt(1);
-  const receipt = await tx5.wait();
+  await tx5.wait();
   console.log("   ✅ 分账完成 | 状态: Completed\n");
 
   // 查看最终结果
-  const finalOrder = await contract.getOrder(1);
   console.log("═══════════════════════════════════");
   console.log("📊 分账明细:");
   console.log("═══════════════════════════════════");
