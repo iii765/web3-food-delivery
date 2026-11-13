@@ -268,21 +268,21 @@
 
 <!-- Fee Split -->
 <div class="fee-section">
-  <h2>📊 分账比例</h2>
+  <h2>📊 分账模型 (商家得餐费90% · 骑手得配送费90% · 协议得各10%)</h2>
   <div class="fee-bars" id="feeBars">
     <div class="fee-bar-group">
       <div class="fee-pct merchant-color" id="merchantPct">0%</div>
-      <div class="fee-label">🏪 商家</div>
+      <div class="fee-label">🏪 商家 (餐费)</div>
       <div class="fee-bar-track"><div class="fee-bar-fill merchant" id="merchantBar" style="width:0%"></div></div>
     </div>
     <div class="fee-bar-group">
       <div class="fee-pct" id="riderPct" style="color:#536dfe">0%</div>
-      <div class="fee-label">🛵 骑手</div>
+      <div class="fee-label">🛵 骑手 (配送费)</div>
       <div class="fee-bar-track"><div class="fee-bar-fill rider" id="riderBar" style="width:0%"></div></div>
     </div>
     <div class="fee-bar-group">
       <div class="fee-pct" id="protocolPct" style="color:#ff9100">0%</div>
-      <div class="fee-label">🔮 协议</div>
+      <div class="fee-label">🔮 协议 (各10%)</div>
       <div class="fee-bar-track"><div class="fee-bar-fill protocol" id="protocolBar" style="width:0%"></div></div>
     </div>
   </div>
@@ -305,7 +305,9 @@
           <th>用户</th>
           <th>商家</th>
           <th>骑手</th>
-          <th>金额</th>
+          <th>餐费</th>
+          <th>配送费</th>
+          <th>总额</th>
           <th>状态</th>
           <th>时间</th>
         </tr>
@@ -362,10 +364,13 @@ const ABI = [
   'function protocolFees() view returns (uint256)',
   'function merchantShare() view returns (uint256)',
   'function riderShare() view returns (uint256)',
-  'function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))',
+  'function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 foodAmount, uint256 deliveryFee, uint256 amount, uint256 timestamp, uint8 status, string metadata))',
   'event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)',
   'event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)'
 ];
+
+// 新版分账模型：商家得餐费 90%，骑手得配送费 90%，协议得各自剩余的 10%（10%+10%）
+const FEE_MODEL = { merchant: 90, rider: 90, protocol: '10%+10%' };
 
 // --- Init ---
 function initNetwork(chainId) {
@@ -448,6 +453,8 @@ async function fetchAllOrders() {
       customer: o.customer,
       merchant: o.merchant,
       rider: o.rider,
+      foodAmount: o.foodAmount,
+      deliveryFee: o.deliveryFee,
       amount: o.amount,
       timestamp: Number(o.timestamp),
       status: Number(o.status),
@@ -476,21 +483,13 @@ function updateDashboard(orders, count) {
   }).catch(() => {});
 
   // Merchant / Rider share
-  Promise.all([contract.merchantShare(), contract.riderShare()]).then(([ms, rs]) => {
-    const m = Number(ms), r = Number(rs);
-    const total = m + r;
-    if (total > 0) {
-      const mp = (m / total * 100).toFixed(1);
-      const rp = (r / total * 100).toFixed(1);
-      const pp = (100 - parseFloat(mp) - parseFloat(rp)).toFixed(1);
-      document.getElementById('merchantPct').textContent = mp + '%';
-      document.getElementById('riderPct').textContent = rp + '%';
-      document.getElementById('protocolPct').textContent = pp + '%';
-      document.getElementById('merchantBar').style.width = mp + '%';
-      document.getElementById('riderBar').style.width = rp + '%';
-      document.getElementById('protocolBar').style.width = pp + '%';
-    }
-  }).catch(() => {});
+  // 新版模型：不依赖合约 merchantShare/riderShare（旧 85/12），直接展示新分账模型
+  document.getElementById('merchantPct').textContent = '90%';
+  document.getElementById('riderPct').textContent = '90%';
+  document.getElementById('protocolPct').textContent = '10%+10%';
+  document.getElementById('merchantBar').style.width = '90%';
+  document.getElementById('riderBar').style.width = '90%';
+  document.getElementById('protocolBar').style.width = '20%';
 
   // Completion rate & total volume
   if (orders && orders.length > 0) {
@@ -540,7 +539,7 @@ function renderStatusDistribution(orders, total) {
 function renderOrdersTable() {
   const body = document.getElementById('ordersBody');
   if (ordersCache.length === 0) {
-    body.innerHTML = '<tr><td colspan="7" class="no-orders">暂无订单，等待三端产生交易数据</td></tr>';
+    body.innerHTML = '<tr><td colspan="9" class="no-orders">暂无订单，等待三端产生交易数据</td></tr>';
     return;
   }
 
@@ -551,11 +550,15 @@ function renderOrdersTable() {
     const rider = o.rider && o.rider !== '0x0000000000000000000000000000000000000000'
       ? o.rider.slice(0, 8) + '...' : '待抢单';
     const suffix = networkCfg.currency === 'MON' ? ' MON' : ' ETH';
+    const foodAmt = o.foodAmount !== undefined ? ethers.formatEther(o.foodAmount) : '--';
+    const delAmt = o.deliveryFee !== undefined ? ethers.formatEther(o.deliveryFee) : '--';
     return `<tr>
       <td>#${o.id}</td>
       <td title="${o.customer}">${o.customer.slice(0, 8)}...</td>
       <td title="${o.merchant}">${o.merchant.slice(0, 8)}...</td>
       <td title="${rider === '待抢单' ? '' : o.rider}" style="color:${rider === '待抢单' ? '#ff9800' : 'inherit'}">${rider}</td>
+      <td>${foodAmt} ${suffix}</td>
+      <td>${delAmt} ${suffix}</td>
       <td>${ethers.formatEther(o.amount)} ${suffix}</td>
       <td><span class="status-badge ${colorClass}">${statusLabel}</span></td>
       <td>${time}</td>
@@ -577,7 +580,7 @@ async function refreshAll() {
       document.getElementById('completionRate').textContent = '--';
       document.getElementById('totalVolume').textContent = '--';
       document.getElementById('ordersBody').innerHTML =
-        '<tr><td colspan="7" class="no-orders">⚠ 节点未连接，无法读取数据</td></tr>';
+        '<tr><td colspan="9" class="no-orders">⚠ 节点未连接，无法读取数据</td></tr>';
       document.getElementById('statusGrid').innerHTML =
         '<div class="status-item" style="grid-column:1/-1;text-align:center;color:#666">等待连接...</div>';
       isRefreshing = false;

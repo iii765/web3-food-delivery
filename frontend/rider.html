@@ -189,17 +189,19 @@
         ])
       );
       const ABI = [
-        "function createOrder(address merchant, string metadata) payable returns (uint256)",
+        "function createOrder(address merchant, uint256 foodAmount, uint256 deliveryFee, string metadata) payable returns (uint256)",
         "function acceptOrder(uint256 orderId)",
         "function claimOrder(uint256 orderId)",
         "function confirmDelivery(uint256 orderId)",
         "function confirmReceipt(uint256 orderId)",
         "function cancelOrder(uint256 orderId)",
-        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
+        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 foodAmount, uint256 deliveryFee, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
         "function orderCount() view returns (uint256)",
         "event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)",
         "event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)"
       ];
+      // 新版骑手收入 = 配送费 * 90%（协议留 10%）
+      const RIDER_EARN_PCT = 90n;
       const STATUS_NAMES = ['Pending','Accepted','Delivering','Delivered','Completed','Cancelled','Disputed'];
       const ZERO_ADDR = '0x0000000000000000000000000000000000000000';
 
@@ -282,7 +284,9 @@
                 params: [{
                   chainId: hexId, chainName,
                   rpcUrls: [rpcUrl],
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  nativeCurrency: chainId === '10143'
+                    ? { name: 'Monad', symbol: 'MON', decimals: 18 }
+                    : { name: 'Ether', symbol: 'ETH', decimals: 18 },
                   blockExplorerUrls: explorer ? [explorer] : []
                 }]
               });
@@ -362,7 +366,7 @@
             let html = '';
             available.forEach(o => {
               const ts = new Date(Number(o.timestamp) * 1000);
-              const rewardWei = BigInt(o.amount) * 12n / 100n;
+              const rewardWei = BigInt(o.deliveryFee) * RIDER_EARN_PCT / 100n;
               html += `<div class="order-item">
                 <div class="order-item-header">
                   <span class="order-id">#${o.id.toString()}</span>
@@ -371,9 +375,10 @@
                 <div class="order-meta">
                   商家: ${shortAddr(o.merchant)}<br>
                   用户: ${shortAddr(o.customer)}<br>
+                  餐费: ${ethers.formatEther(o.foodAmount)} ETH · 配送费: ${ethers.formatEther(o.deliveryFee)} ETH<br>
                   下单: ${ts.toLocaleString('zh-CN')}
                 </div>
-                <div class="order-reward">🏆 骑手收益: ${ethers.formatEther(rewardWei)} ETH (12%)</div>
+                <div class="order-reward">🏆 骑手收益: ${ethers.formatEther(rewardWei)} ETH (配送费的 90%)</div>
                 <div class="order-actions">
                   <button class="btn btn-sm btn-claim" onclick="window.claimOrder('${o.id}')">抢单</button>
                 </div>
@@ -397,7 +402,7 @@
                 <div class="order-meta">
                   商家: ${shortAddr(o.merchant)}<br>
                   用户: ${shortAddr(o.customer)}<br>
-                  金额: ${ethers.formatEther(o.amount)} ETH<br>
+                  总额: ${ethers.formatEther(o.amount)} ETH (餐费 ${ethers.formatEther(o.foodAmount)} + 配送 ${ethers.formatEther(o.deliveryFee)})<br>
                   下单: ${ts.toLocaleString('zh-CN')}
                 </div>
                 <div class="order-actions">
@@ -417,14 +422,15 @@
               const status = Number(o.status);
               const statusText = status === 4 ? '已完成' : '已送达，待用户确认';
               const ts = new Date(Number(o.timestamp) * 1000);
-              const rewardWei = BigInt(o.amount) * 12n / 100n;
+              const valueEth = ethers.formatEther(o.amount);
+              const rewardWei = BigInt(o.deliveryFee) * RIDER_EARN_PCT / 100n;
               return `<div class="order-item">
                 <div class="order-item-header">
                   <span class="order-id">#${o.id.toString()}</span>
                   <span class="status-badge status-${STATUS_NAMES[status]}">${statusText}</span>
                 </div>
-                <div class="order-meta">商家: ${shortAddr(o.merchant)}<br>用户: ${shortAddr(o.customer)}<br>备注: ${o.metadata || '(无)'}<br>下单: ${ts.toLocaleString('zh-CN')}</div>
-                <div class="order-reward">骑手收益: ${ethers.formatEther(rewardWei)} ETH (12%)</div>
+                <div class="order-meta">商家: ${shortAddr(o.merchant)}<br>用户: ${shortAddr(o.customer)}<br>总额: ${valueEth} ETH · 备注: ${o.metadata || '(无)'}<br>下单: ${ts.toLocaleString('zh-CN')}</div>
+                <div class="order-reward">骑手收益: ${ethers.formatEther(rewardWei)} ETH (配送费的 90%)</div>
               </div>`;
             }).join('');
           }

@@ -8,7 +8,7 @@ window.WEB3_FOOD_CONFIG = {
       rpc: "http://127.0.0.1:8545",
       currency: "ETH",
       explorer: null,
-      contractAddress: "0xe7f1725E7734CE288F8367e1Bb143E90bb3F0512"
+      contractAddress: "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     },
     "10143": {
       chainId: 10143,
@@ -17,7 +17,7 @@ window.WEB3_FOOD_CONFIG = {
       rpc: "https://testnet-rpc.monad.xyz",
       currency: "MON",
       explorer: "https://testnet.monadexplorer.com",
-      contractAddress: "0xd1807927CD56CC87Ec846B96aBCFdFD959529436"
+      contractAddress: "0xC2f42082b16b4c06a0020a9a4cCDf555EF8c59de"
     }
   }
 };

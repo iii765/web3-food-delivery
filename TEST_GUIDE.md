@@ -192,10 +192,132 @@ MetaMask 设置 → 高级 → 清除活动记录（Clear activity tab data）�
 
 ---
 
+## Monad Testnet 联调流程
+
+> Monad 是公开测试网：交易会真实广播到测试网，但只消耗测试 MON，不要使用主网资产或含真实资金的钱包。
+>
+> **和本地链最大的区别：** 不需要 `npm run node`；每个角色必须使用一个独立、已领水的测试钱包；部署后必须将测试网合约地址同步进前端配置。
+
+### 0. 准备三个测试钱包并领取测试 MON
+
+建议在 MetaMask 新建三个专用测试账户（或三个独立测试钱包），不要导入常用主钱包私钥：
+
+| 角色 | 用途 | 需要测试 MON |
+|---|---|---|
+| 顾客钱包 | 下单、取消、确认收货 | 是：支付订单金额和 Gas |
+| 商家钱包 | 接单 | 是：支付 Gas |
+| 骑手钱包 | 抢单、确认送达 | 是：支付 Gas |
+| 部署钱包 | 部署合约、后续管理协议费/争议 | 是：支付部署 Gas |
+
+可让部署钱包同时充当顾客钱包，但商家和骑手必须是不同地址；合约会拒绝顾客或商家自己抢骑手单。
+
+分别从 Monad 官方 faucet 为会发交易的地址领取测试 MON。测试网的币没有价值；余额不足时只会导致交易无法广播或 Gas 估算失败。
+
+### 1. 在 MetaMask 添加 Monad Testnet
+
+MetaMask → 设置 → 网络 → 添加网络 → 手动添加：
+
+| 字段 | 填写内容 |
+|---|---|
+| 网络名称 | Monad Testnet |
+| RPC URL | `https://testnet-rpc.monad.xyz` |
+| 链 ID | `10143` |
+| 货币符号 | `MON` |
+| 区块浏览器 | `https://testnet.monadexplorer.com` |
+
+前端右上角选择 **Monad Testnet** 后，页面会请求切换到这个网络。确认 MetaMask 顶部也显示的是 Monad Testnet，不能停留在 Hardhat Local（31337）。
+
+### 2. 配置部署钱包（只在本机 `.env`）
+
+在项目根目录创建或编辑 `.env`。`PRIVATE_KEY` 必须是**部署钱包的测试私钥**，以 `0x` 开头；不要把此文件提交到 Git。
+
+```bash
+cd ~/.openclaw/workspace/web3-dev
+cat > .env <<'EOF'
+MONAD_RPC_URL=https://testnet-rpc.monad.xyz
+PRIVATE_KEY=0x替换成部署钱包的测试私钥
+EOF
+```
+
+先确认部署地址有测试 MON；如果余额为 0，先到 faucet 领取，再继续。
+
+### 3. 编译、测试并部署至 Monad
+
+```bash
+cd ~/.openclaw/workspace/web3-dev
+npm test
+npx hardhat run scripts/deploy-order.js --network monadTestnet
+```
+
+部署成功时记录终端输出中的地址：
+
+```text
+✅ OrderContract deployed to: 0x你的Monad合约地址
+```
+
+> 脚本在非本地网络下**不会自动修改**前端配置，避免意外覆盖已部署地址；下一步必须手动同步。
+
+### 4. 将新合约地址同步到前端
+
+打开 `frontend/config.js`，只替换 `"10143"`（Monad Testnet）区块的 `contractAddress`，**不要动 `"31337"` 的本地地址**：
+
+```js
+"10143": {
+  chainId: 10143,
+  // ...
+  contractAddress: "0x你的Monad合约地址"
+}
+```
+
+保存后启动或重启前端：
+
+```bash
+npm run serve
+```
+
+浏览器打开 <http://127.0.0.1:8081/>，再按 `Ctrl + Shift + R` 强制刷新，避免继续使用浏览器缓存中的旧 `config.js`。
+
+### 5. Monad 全流程测试
+
+每次切换角色前：在 MetaMask 切到对应账户 → 确认网络为 Monad Testnet → 对应页面点击“连接钱包”。
+
+1. **顾客**：打开 `customer.html`，填写**商家测试地址**、小额测试金额（建议 `0.001 MON`）和备注，创建订单。预期状态：`Pending`。
+2. **商家**：切到商家钱包，打开 `merchant.html`，接单。预期状态：`Accepted`。
+3. **骑手**：切到骑手钱包，打开 `rider.html`，抢单，再确认送达。预期状态：`Delivered`。
+4. **顾客**：切回顾客钱包，打开 `customer.html`，确认收货。预期状态：`Completed`；合约按 85% / 12% / 3% 分账。
+5. **管理员核对**：使用部署钱包打开 `admin.html`，核对订单记录、事件和协议费用。
+
+每一笔业务交易都应在 MetaMask 确认后等待上链。浏览器显示成功前，页面会等待 `tx.wait()`，即已取得成功回执；仍建议复制交易哈希，在 Monad 区块浏览器确认 `Success`、调用方法和事件。
+
+### 6. 验证已部署合约（可选）
+
+部署完成后可尝试：
+
+```bash
+npx hardhat verify --network monadTestnet 0x你的Monad合约地址
+```
+
+如果验证服务要求 API Key，再根据 Monad 当前官方验证器要求配置对应环境变量；这不会影响合约本身的运行或前端测试。
+
+### Monad 常见问题
+
+**Q: 页面显示“合约未找到”或订单全部加载失败？**
+依次确认：MetaMask 是 Chain ID `10143`、`frontend/config.js` 的 `10143.contractAddress` 是本次部署地址、前端已强制刷新，并在区块浏览器确认该地址有合约代码。
+
+**Q: MetaMask 无法确认交易 / Gas 估算失败？**
+确认当前账户有足够测试 MON，并检查角色是否正确：仅商家可接单、仅不同于顾客和商家的地址可抢单、仅骑手可确认送达、仅顾客可确认收货。
+
+**Q: 前端提示成功，但区块浏览器显示失败？**
+保存交易哈希和 MetaMask 错误信息，不要继续下一步。先核对 receipt 状态、当前网络、合约地址与订单状态；已失败的交易不会改变订单状态。
+
+**Q: 能否使用之前 Hardhat Local 的订单？**
+不能。本地链与 Monad Testnet 完全独立；需要在 Monad 上重新部署并新建订单。
+
 ## 进程一览
 
-| 进程 | 端口 | 作用 |
-|---|---|---|
-| `npm run node` | 8545 | 本地区块链 |
-| `npm run serve` | 8081 | 前端 HTTP 服务 |
+| 场景 | 进程 | 端口 | 作用 |
+|---|---|---:|---|
+| 本地联调 | `npm run node` | 8545 | Hardhat 本地区块链 |
+| 本地 / Monad 前端 | `npm run serve` | 8081 | 前端 HTTP 服务 |
+| Monad 测试网 | 无需本地链 | — | 使用公共 Monad RPC |
 

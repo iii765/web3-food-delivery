@@ -206,13 +206,13 @@
         ])
       );
       const ABI = [
-        "function createOrder(address merchant, string metadata) payable returns (uint256)",
+        "function createOrder(address merchant, uint256 foodAmount, uint256 deliveryFee, string metadata) payable returns (uint256)",
         "function acceptOrder(uint256 orderId)",
         "function claimOrder(uint256 orderId)",
         "function confirmDelivery(uint256 orderId)",
         "function confirmReceipt(uint256 orderId)",
         "function cancelOrder(uint256 orderId)",
-        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
+        "function getOrder(uint256 orderId) view returns (tuple(uint256 id, address customer, address merchant, address rider, uint256 foodAmount, uint256 deliveryFee, uint256 amount, uint256 timestamp, uint8 status, string metadata))",
         "function orderCount() view returns (uint256)",
         "event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount)",
         "event OrderCompleted(uint256 indexed orderId, uint256 merchantAmount, uint256 riderAmount, uint256 protocolAmount)"
@@ -302,7 +302,9 @@
                 params: [{
                   chainId: hexId, chainName,
                   rpcUrls: [rpcUrl],
-                  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+                  nativeCurrency: chainId === '10143'
+                    ? { name: 'Monad', symbol: 'MON', decimals: 18 }
+                    : { name: 'Ether', symbol: 'ETH', decimals: 18 },
                   blockExplorerUrls: explorer ? [explorer] : []
                 }]
               });
@@ -398,6 +400,7 @@
                   </div>
                   <div class="order-meta">
                     用户: ${shortAddr(o.customer)}<br>
+                    餐费: ${ethers.formatEther(o.foodAmount)} ETH · 配送费: ${ethers.formatEther(o.deliveryFee)} ETH<br>
                     备注: ${o.metadata || '(无)'}<br>
                     下单: ${ts.toLocaleString('zh-CN')}
                   </div>
@@ -427,7 +430,8 @@
                     <span class="status-badge status-${sName}">${sName}</span>
                   </div>
                   <div class="order-meta">
-                    用户: ${shortAddr(o.customer)} · 金额: ${ethers.formatEther(o.amount)} ETH<br>
+                    用户: ${shortAddr(o.customer)} · 总额: ${ethers.formatEther(o.amount)} ETH<br>
+                    餐费: ${ethers.formatEther(o.foodAmount)} ETH · 配送费: ${ethers.formatEther(o.deliveryFee)} ETH<br>
                     骑手: ${o.rider !== ZERO_ADDR ? shortAddr(o.rider) : '待分配'}<br>
                     备注: ${o.metadata || '(无)'}<br>
                     下单: ${ts.toLocaleString('zh-CN')}
@@ -448,7 +452,7 @@
               const ts = new Date(Number(o.timestamp) * 1000);
               return `<div class="order-item">
                 <div class="order-item-header"><span class="order-id">#${o.id.toString()}</span><span class="status-badge status-${STATUS_NAMES[status]}">${labels[status]}</span></div>
-                <div class="order-meta">用户: ${shortAddr(o.customer)} · 金额: ${ethers.formatEther(o.amount)} ETH<br>骑手: ${o.rider !== ZERO_ADDR ? shortAddr(o.rider) : '商家自配送'}<br>备注: ${o.metadata || '(无)'}<br>下单: ${ts.toLocaleString('zh-CN')}</div>
+                <div class="order-meta">用户: ${shortAddr(o.customer)} · 总额: ${ethers.formatEther(o.amount)} ETH (餐费 ${ethers.formatEther(o.foodAmount)} + 配送 ${ethers.formatEther(o.deliveryFee)})<br>骑手: ${o.rider !== ZERO_ADDR ? shortAddr(o.rider) : '商家自配送'}<br>备注: ${o.metadata || '(无)'}<br>下单: ${ts.toLocaleString('zh-CN')}</div>
               </div>`;
             }).join('');
           }

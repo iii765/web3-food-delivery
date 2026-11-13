@@ -6,10 +6,9 @@ pragma solidity ^0.8.24;
  * @notice Web3外卖平台核心订单合约
  * @dev 资金托管 → 商家接单 → 骑手配送 → 确认收货 → 自动分账
  *
- * 分账比例（可调）：
- *   - 商家: 85%
- *   - 骑手: 12%
- *   - 协议: 3%
+ * 分账规则：
+ *   - 餐费：商家 90%，协议 10%
+ *   - 配送费：骑手 90%，协议 10%
  */
 
 contract OrderContract {
@@ -18,9 +17,8 @@ contract OrderContract {
     address public owner;              // 协议管理员
     uint256 public orderCount;         // 总订单数
     uint256 public protocolFees;       // 累积协议费
-    uint256 public merchantShare = 85; // 商家分成比例(%)
-    uint256 public riderShare = 12;    // 骑手分成比例(%)
-    // 协议分成 = 100 - merchantShare - riderShare (默认3%)
+    uint256 public constant MERCHANT_SHARE = 90; // 餐费中商家比例(%)
+    uint256 public constant RIDER_SHARE = 90;    // 配送费中骑手比例(%)
 
     // ============ 枚举 ============
 
@@ -41,7 +39,9 @@ contract OrderContract {
         address customer;       // 用户
         address payable merchant; // 商家（可收款）
         address payable rider;    // 骑手（可收款）
-        uint256 amount;         // 订单金额(wei)
+        uint256 foodAmount;     // 餐费(wei)
+        uint256 deliveryFee;    // 配送费(wei)
+        uint256 amount;         // 总金额(餐费 + 配送费，wei)
         uint256 timestamp;      // 下单时间
         OrderStatus status;
         string metadata;        // 订单详情IPFS hash / JSON string
@@ -54,7 +54,7 @@ contract OrderContract {
 
     // ============ 事件 ============
 
-    event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 amount);
+    event OrderCreated(uint256 indexed orderId, address indexed customer, uint256 foodAmount, uint256 deliveryFee);
     event OrderAccepted(uint256 indexed orderId, address indexed merchant);
     event RiderAssigned(uint256 indexed orderId, address indexed rider);
     event OrderDelivered(uint256 indexed orderId);
@@ -95,14 +95,18 @@ contract OrderContract {
     /**
      * @notice 用户下单，资金托管到合约
      * @param _merchant 商家地址
-     * @param _metadata 订单详情（JSON: {items, price, note}）
+     * @param _foodAmount 餐费（wei）
+     * @param _deliveryFee 配送费（wei）
+     * @param _metadata 订单详情（JSON: {items, note}）
      */
-    function createOrder(address payable _merchant, string calldata _metadata)
-        external
-        payable
-        returns (uint256)
-    {
-        require(msg.value > 0, "Amount must be > 0");
+    function createOrder(
+        address payable _merchant,
+        uint256 _foodAmount,
+        uint256 _deliveryFee,
+        string calldata _metadata
+    ) external payable returns (uint256) {
+        require(_foodAmount > 0, "Food amount must be > 0");
+        require(msg.value == _foodAmount + _deliveryFee, "Incorrect payment");
         require(_merchant != address(0), "Invalid merchant");
         require(_merchant != msg.sender, "Cannot order from yourself");
 
@@ -114,6 +118,8 @@ contract OrderContract {
             customer: msg.sender,
             merchant: _merchant,
             rider: payable(address(0)), // 待分配
+            foodAmount: _foodAmount,
+            deliveryFee: _deliveryFee,
             amount: msg.value,
             timestamp: block.timestamp,
             status: OrderStatus.Pending,
@@ -122,7 +128,7 @@ contract OrderContract {
 
         customerOrders[msg.sender].push(orderId);
 
-        emit OrderCreated(orderId, msg.sender, msg.value);
+        emit OrderCreated(orderId, msg.sender, _foodAmount, _deliveryFee);
         return orderId;
     }
 
@@ -250,19 +256,21 @@ contract OrderContract {
 
     /**
      * @dev 统一结算逻辑，避免正常确认和争议裁决的资金分配规则不一致。
-     * 有骑手：按 merchantShare/riderShare 分账；无骑手：骑手份额归商家。
+     * 餐费：商家 90%、协议 10%；配送费：骑手 90%、协议 10%。
+     * 无骑手的裁决结算中，配送费原路退款给顾客，避免商家获得未履行的配送服务费。
      */
     function _settleOrder(uint256 _orderId, Order storage order) internal {
-        uint256 merchantAmount = (order.amount * merchantShare) / 100;
+        uint256 merchantAmount = (order.foodAmount * MERCHANT_SHARE) / 100;
         uint256 riderAmount = 0;
+        uint256 customerRefund = 0;
 
         if (order.rider != address(0)) {
-            riderAmount = (order.amount * riderShare) / 100;
+            riderAmount = (order.deliveryFee * RIDER_SHARE) / 100;
         } else {
-            merchantAmount += (order.amount * riderShare) / 100;
+            customerRefund = order.deliveryFee;
         }
 
-        uint256 protocolAmount = order.amount - merchantAmount - riderAmount;
+        uint256 protocolAmount = order.amount - merchantAmount - riderAmount - customerRefund;
         protocolFees += protocolAmount;
 
         (bool mSuccess, ) = order.merchant.call{value: merchantAmount}("");
@@ -273,19 +281,12 @@ contract OrderContract {
             require(rSuccess, "Rider payment failed");
         }
 
-        emit OrderCompleted(_orderId, merchantAmount, riderAmount, protocolAmount);
-    }
+        if (customerRefund > 0) {
+            (bool cSuccess, ) = order.customer.call{value: customerRefund}("");
+            require(cSuccess, "Delivery fee refund failed");
+        }
 
-    /**
-     * @notice 调整分账比例（DAO治理后调用）
-     */
-    function setShareRatios(uint256 _merchant, uint256 _rider)
-        external
-        onlyOwner
-    {
-        require(_merchant + _rider <= 100, "Sum must be <= 100");
-        merchantShare = _merchant;
-        riderShare = _rider;
+        emit OrderCompleted(_orderId, merchantAmount, riderAmount, protocolAmount);
     }
 
     /**
@@ -309,8 +310,11 @@ contract OrderContract {
         return customerOrders[_customer];
     }
 
-    function getProtocolFee() external view returns (uint256) {
-        // 动态计算当前协议费率
-        return 100 - merchantShare - riderShare;
+    function getFoodProtocolFee() external pure returns (uint256) {
+        return 100 - MERCHANT_SHARE;
+    }
+
+    function getDeliveryProtocolFee() external pure returns (uint256) {
+        return 100 - RIDER_SHARE;
     }
 }
